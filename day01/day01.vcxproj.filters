@@ -6,5 +6,7 @@
   <ItemGroup>
     <Text Include="input01a.txt" />
     <Text Include="input01b.txt" />
+    <Text Include="input02a.txt" />
+    <Text Include="input02b.txt" />
   </ItemGroup>
 </Project>
