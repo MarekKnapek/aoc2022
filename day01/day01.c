@@ -4,7 +4,17 @@
 #include <stddef.h>
 #include <assert.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
+
+void crash(void)
+{
+	int volatile* volatile ptr;
+
+	ptr = NULL;
+	*ptr = 0;
+}
 
 int mk_aoc_find(unsigned char const needle, unsigned char const* const haystack, int const len, int* const position)
 {
@@ -485,6 +495,244 @@ int mk_aoc2022_day02b(char const* const input, int* const out)
 }
 
 
+struct rucksack_s
+{
+	int m_count;
+	int m_capacity;
+	char* m_elements;
+};
+
+void mk_aoc2022_day03_rucksack_construct(struct rucksack_s* r)
+{
+	assert(r);
+
+	r->m_count = 0;
+	r->m_capacity = 0;
+	r->m_elements = NULL;
+}
+
+void mk_aoc2022_day03_rucksack_destruct(struct rucksack_s* r)
+{
+	assert(r);
+
+	free(r->m_elements);
+}
+
+void mk_aoc2022_day03_rucksack_append(struct rucksack_s* r, char ch)
+{
+	char* newelems;
+
+	if(r->m_count == r->m_capacity)
+	{
+		r->m_capacity *= 2;
+		if(r->m_capacity == 0)
+		{
+			r->m_capacity = 8;
+		}
+		newelems = malloc(r->m_capacity * sizeof(char));
+		if(newelems == NULL) crash();
+		memcpy(newelems, r->m_elements, r->m_count * sizeof(char));
+		free(r->m_elements);
+		r->m_elements = newelems;
+	}
+	r->m_elements[r->m_count] = ch;
+	++r->m_count;
+}
+
+int mk_aoc2022_day03_parse_rucksack(FILE* f, struct rucksack_s* r)
+{
+	size_t read;
+	char ch;
+
+	assert(f);
+	assert(r);
+
+	r->m_count = 0;
+	if(ferror(f) != 0)
+	{
+		return ((int)(__LINE__));
+	}
+	if(feof(f) != 0)
+	{
+		return 0;
+	}
+	for(;;)
+	{
+		read = fread(&ch, 1, 1, f);
+		if(read != 1)
+		{
+			if(ferror(f) != 0)
+			{
+				return ((int)(__LINE__));
+			}
+			if(feof(f) != 0)
+			{
+				break;
+			}
+			return ((int)(__LINE__));
+		}
+		if(ch == 0x0a)
+		{
+			break;
+		}
+		assert
+		(
+			(ch >= 'a' && ch <= 'z') ||
+			(ch >= 'A' && ch <= 'Z')
+		);
+		mk_aoc2022_day03_rucksack_append(r, ch);
+	}
+	if(r->m_count % 2 != 0) return ((int)(__LINE__));
+	return 0;
+}
+
+int mk_aoc2022_day03_find_bad_item(struct rucksack_s* r, char* ch)
+{
+	int i;
+	int j;
+
+	assert(r);
+	assert(r->m_count % 2 == 0);
+	assert(ch);
+
+	for(i = 0; i != r->m_count / 2; ++i)
+	{
+		for(j = r->m_count / 2; j != r->m_count; ++j)
+		{
+			if(r->m_elements[i] == r->m_elements[j])
+			{
+				goto break2;
+			}
+		}
+	}
+	return ((int)(__LINE__));
+	break2:;
+	*ch = r->m_elements[i];
+	return 0;
+}
+
+int mk_aoc2022_day03b_find_common_item(struct rucksack_s* r0, struct rucksack_s* r1, struct rucksack_s* r2, char* item)
+{
+	int i;
+	int j;
+	int k;
+
+	assert(r0);
+	assert(r1);
+	assert(r2);
+	assert(item);
+
+	for(i = 0; i != r0->m_count; ++i)
+	{
+		for(j = 0; j != r1->m_count; ++j)
+		{
+			if(r0->m_elements[i] == r1->m_elements[j])
+			{
+				for(k = 0; k != r2->m_count; ++k)
+				{
+					if(r0->m_elements[i] == r2->m_elements[k])
+					{
+						goto break3;
+					}
+				}
+			}
+		}
+	}
+	return ((int)(__LINE__));
+	break3:;
+	*item = r0->m_elements[i];
+	return 0;
+}
+
+int mk_aoc2022_day03_score_item(char ch)
+{
+	if(ch >= 'a' && ch <= 'z')
+	{
+		return ch - 'a' + 1;
+	}
+	else
+	{
+		return ch - 'A' + 1 + 26;
+	}
+}
+
+int mk_aoc2022_day03a(char const* const input, int* const out)
+{
+	int score;
+	struct rucksack_s r;
+	FILE* f;
+	int err;
+	char item;
+	int closed;
+
+	assert(input);
+	assert(input[0]);
+	assert(out);
+
+	score = 0;
+	mk_aoc2022_day03_rucksack_construct(&r);
+	f = fopen(input, "rb");
+	if(!f) return ((int)(__LINE__));
+	for(;;)
+	{
+		err = mk_aoc2022_day03_parse_rucksack(f, &r);
+		if(err != 0) return err;
+		if(r.m_count == 0) break;
+		err = mk_aoc2022_day03_find_bad_item(&r, &item);
+		if(err != 0) return err;
+		score += mk_aoc2022_day03_score_item(item);
+	}
+	mk_aoc2022_day03_rucksack_destruct(&r);
+	closed = fclose(f);
+	if(closed != 0) return ((int)(__LINE__));
+	*out = score;
+	return 0;
+}
+
+int mk_aoc2022_day03b(char const* const input, int* const out)
+{
+	int score;
+	struct rucksack_s r[3];
+	FILE* f;
+	int err;
+	char item;
+	int closed;
+
+	assert(input);
+	assert(input[0]);
+	assert(out);
+
+	score = 0;
+	mk_aoc2022_day03_rucksack_construct(&r[0]);
+	mk_aoc2022_day03_rucksack_construct(&r[1]);
+	mk_aoc2022_day03_rucksack_construct(&r[2]);
+	f = fopen(input, "rb");
+	if(!f) return ((int)(__LINE__));
+	for(;;)
+	{
+		err = mk_aoc2022_day03_parse_rucksack(f, &r[0]);
+		if(err != 0) return err;
+		if(r[0].m_count == 0) break;
+		err = mk_aoc2022_day03_parse_rucksack(f, &r[1]);
+		if(err != 0) return err;
+		if(r[1].m_count == 0) return ((int)(__LINE__));
+		err = mk_aoc2022_day03_parse_rucksack(f, &r[2]);
+		if(err != 0) return err;
+		if(r[2].m_count == 0) return ((int)(__LINE__));
+		err = mk_aoc2022_day03b_find_common_item(&r[0], &r[1], &r[2], &item);
+		if(err != 0) return err;
+		score += mk_aoc2022_day03_score_item(item);
+	}
+	mk_aoc2022_day03_rucksack_destruct(&r[2]);
+	mk_aoc2022_day03_rucksack_destruct(&r[1]);
+	mk_aoc2022_day03_rucksack_destruct(&r[0]);
+	closed = fclose(f);
+	if(closed != 0) return ((int)(__LINE__));
+	*out = score;
+	return 0;
+}
+
+
 #include <stdio.h>
 
 int main(void)
@@ -511,6 +759,17 @@ int main(void)
 	if(err != 0) return err;
 	printf("%d\n", ret);
 	err = mk_aoc2022_day02b("input02b.txt", &ret);
+	if(err != 0) return err;
+	printf("%d\n", ret);
+
+	printf("%s\n", "Day 3");
+	err = mk_aoc2022_day03a("input03a.txt", &ret);
+	if(err != 0) return err;
+	printf("%d\n", ret);
+	err = mk_aoc2022_day03a("input03b.txt", &ret);
+	if(err != 0) return err;
+	printf("%d\n", ret);
+	err = mk_aoc2022_day03b("input03b.txt", &ret);
 	if(err != 0) return err;
 	printf("%d\n", ret);
 
