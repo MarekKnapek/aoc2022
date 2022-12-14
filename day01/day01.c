@@ -733,6 +733,103 @@ int mk_aoc2022_day03b(char const* const input, int* const out)
 }
 
 
+int mk_aoc2022_day04a(char const* const input, int* const out)
+{
+	int fully_overlapped_count;
+	int scanned;
+	int section1start;
+	int section1end;
+	int section2start;
+	int section2end;
+	FILE* f;
+	int closed;
+
+	assert(input);
+	assert(input[0]);
+	assert(out);
+
+	fully_overlapped_count = 0;
+	f = fopen(input, "rb");
+	if(!f) return ((int)(__LINE__));
+	for(;;)
+	{
+		scanned = fscanf(f, "%d-%d,%d-%d\x0a", &section1start, &section1end, &section2start, &section2end);
+		if(!(scanned == 4))
+		{
+			if(ferror(f) != 0)
+			{
+				return ((int)(__LINE__));
+			}
+			if(feof(f) != 0)
+			{
+				break;
+			}
+			return ((int)(__LINE__));
+		}
+		if
+		(
+			(section1start >= section2start && section1end <= section2end) ||
+			(section2start >= section1start && section2end <= section1end)
+		)
+		{
+			++fully_overlapped_count;
+		}
+	}
+	closed = fclose(f);
+	if(closed != 0) return ((int)(__LINE__));
+	*out = fully_overlapped_count;
+	return 0;
+}
+
+int mk_aoc2022_day04b(char const* const input, int* const out)
+{
+	int partially_overlapped_count;
+	int scanned;
+	int section1start;
+	int section1end;
+	int section2start;
+	int section2end;
+	FILE* f;
+	int closed;
+
+	assert(input);
+	assert(input[0]);
+	assert(out);
+
+	partially_overlapped_count = 0;
+	f = fopen(input, "rb");
+	if(!f) return ((int)(__LINE__));
+	for(;;)
+	{
+		scanned = fscanf(f, "%d-%d,%d-%d\x0a", &section1start, &section1end, &section2start, &section2end);
+		if(!(scanned == 4))
+		{
+			if(ferror(f) != 0)
+			{
+				return ((int)(__LINE__));
+			}
+			if(feof(f) != 0)
+			{
+				break;
+			}
+			return ((int)(__LINE__));
+		}
+		if
+		(
+			(section1start >= section2start && section1start <= section2end) ||
+			(section2start >= section1start && section2start <= section1end)
+		)
+		{
+			++partially_overlapped_count;
+		}
+	}
+	closed = fclose(f);
+	if(closed != 0) return ((int)(__LINE__));
+	*out = partially_overlapped_count;
+	return 0;
+}
+
+
 #include <stdio.h>
 
 int main(void)
@@ -770,6 +867,17 @@ int main(void)
 	if(err != 0) return err;
 	printf("%d\n", ret);
 	err = mk_aoc2022_day03b("input03b.txt", &ret);
+	if(err != 0) return err;
+	printf("%d\n", ret);
+
+	printf("%s\n", "Day 4");
+	err = mk_aoc2022_day04a("input04a.txt", &ret);
+	if(err != 0) return err;
+	printf("%d\n", ret);
+	err = mk_aoc2022_day04a("input04b.txt", &ret);
+	if(err != 0) return err;
+	printf("%d\n", ret);
+	err = mk_aoc2022_day04b("input04b.txt", &ret);
 	if(err != 0) return err;
 	printf("%d\n", ret);
 
