@@ -1066,6 +1066,64 @@ int mk_aoc2022_day05b(char const* const input)
 }
 
 
+int mk_aoc2022_day06(char const* const input, int run_len, int* out)
+{
+	int ret;
+	struct line_s l;
+	FILE* f;
+	int err;
+	int i;
+	int j;
+	int k;
+	int closed;
+
+	assert(input);
+	assert(input[0]);
+	assert(out);
+
+	ret = 0;
+	mk_aoc2022_day05_line_construct(&l);
+	f = fopen(input, "rb");
+	if(!f) return ((int)(__LINE__));
+	err = mk_aoc2022_day05_line_read(f, &l);
+	if(err != 0) return err;
+	if(!(l.m_count >= run_len)) return ((int)(__LINE__));
+	i = 0;
+	while(i <= l.m_count - run_len)
+	{
+		for(j = 0; j != run_len; ++j)
+		{
+			for(k = 0; k != run_len - 1 - j; ++k)
+			{
+				if(l.m_elements[i + run_len - 1 - j] == l.m_elements[i + run_len - 1 - j - 1 - k])
+				{
+					i += run_len - 1 - j - k;
+					goto continue2;
+				}
+			}
+		}
+		ret = i + run_len;
+		break;
+		continue2:;
+	}
+	closed = fclose(f);
+	if(closed != 0) return ((int)(__LINE__));
+	mk_aoc2022_day05_line_destruct(&l);
+	*out = ret;
+	return 0;
+}
+
+int mk_aoc2022_day06a(char const* const input, int* out)
+{
+	return mk_aoc2022_day06(input, 4, out);
+}
+
+int mk_aoc2022_day06b(char const* const input, int* out)
+{
+	return mk_aoc2022_day06(input, 14, out);
+}
+
+
 #include <stdio.h>
 
 int main(void)
@@ -1126,6 +1184,44 @@ int main(void)
 	if(err != 0) return err;
 	err = mk_aoc2022_day05b("input05b.txt");
 	if(err != 0) return err;
+
+	printf("%s\n", "Day 6");
+	err = mk_aoc2022_day06a("input06a.txt", &ret);
+	if(err != 0) return err;
+	printf("%d\n", ret);
+	err = mk_aoc2022_day06a("input06b.txt", &ret);
+	if(err != 0) return err;
+	printf("%d\n", ret);
+	err = mk_aoc2022_day06a("input06c.txt", &ret);
+	if(err != 0) return err;
+	printf("%d\n", ret);
+	err = mk_aoc2022_day06a("input06d.txt", &ret);
+	if(err != 0) return err;
+	printf("%d\n", ret);
+	err = mk_aoc2022_day06a("input06e.txt", &ret);
+	if(err != 0) return err;
+	printf("%d\n", ret);
+	err = mk_aoc2022_day06a("input06f.txt", &ret);
+	if(err != 0) return err;
+	printf("%d\n", ret);
+	err = mk_aoc2022_day06b("input06a.txt", &ret);
+	if(err != 0) return err;
+	printf("%d\n", ret);
+	err = mk_aoc2022_day06b("input06b.txt", &ret);
+	if(err != 0) return err;
+	printf("%d\n", ret);
+	err = mk_aoc2022_day06b("input06c.txt", &ret);
+	if(err != 0) return err;
+	printf("%d\n", ret);
+	err = mk_aoc2022_day06b("input06d.txt", &ret);
+	if(err != 0) return err;
+	printf("%d\n", ret);
+	err = mk_aoc2022_day06b("input06e.txt", &ret);
+	if(err != 0) return err;
+	printf("%d\n", ret);
+	err = mk_aoc2022_day06b("input06f.txt", &ret);
+	if(err != 0) return err;
+	printf("%d\n", ret);
 
 	return 0;
 }
