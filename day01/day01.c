@@ -830,6 +830,242 @@ int mk_aoc2022_day04b(char const* const input, int* const out)
 }
 
 
+struct line_s
+{
+	int m_count;
+	int m_capacity;
+	char* m_elements;
+};
+
+void mk_aoc2022_day05_line_construct(struct line_s* l)
+{
+	assert(l);
+
+	l->m_count = 0;
+	l->m_capacity = 0;
+	l->m_elements = NULL;
+}
+
+void mk_aoc2022_day05_line_destruct(struct line_s* l)
+{
+	assert(l);
+
+	free(l->m_elements);
+}
+
+void mk_aoc2022_day05_line_append(struct line_s* l, char ch)
+{
+	char* newelems;
+
+	if(l->m_count == l->m_capacity)
+	{
+		l->m_capacity *= 2;
+		if(l->m_capacity == 0)
+		{
+			l->m_capacity = 8;
+		}
+		newelems = malloc(l->m_capacity * sizeof(char));
+		if(newelems == NULL) crash();
+		memcpy(newelems, l->m_elements, l->m_count * sizeof(char));
+		free(l->m_elements);
+		l->m_elements = newelems;
+	}
+	l->m_elements[l->m_count] = ch;
+	++l->m_count;
+}
+
+int mk_aoc2022_day05_line_read(FILE* f, struct line_s* l)
+{
+	size_t read;
+	char ch;
+
+	assert(f);
+	assert(l);
+
+	l->m_count = 0;
+	if(ferror(f) != 0)
+	{
+		return ((int)(__LINE__));
+	}
+	if(feof(f) != 0)
+	{
+		return 0;
+	}
+	for(;;)
+	{
+		read = fread(&ch, 1, 1, f);
+		if(read != 1)
+		{
+			if(ferror(f) != 0)
+			{
+				return ((int)(__LINE__));
+			}
+			if(feof(f) != 0)
+			{
+				break;
+			}
+			return ((int)(__LINE__));
+		}
+		if(ch == 0x0a)
+		{
+			break;
+		}
+		mk_aoc2022_day05_line_append(l, ch);
+	}
+	return 0;
+}
+
+int mk_aoc2022_day05_line_is_numbers(struct line_s* l)
+{
+	assert(l);
+
+	return l->m_count >= 2 && l->m_elements[0] == ' ' && l->m_elements[1] == '1';
+}
+
+void mk_aoc2022_day05_line_reverse(struct line_s* l)
+{
+	int i;
+	char tmp;
+
+	assert(l);
+
+	for(i = 0; i != l->m_count / 2; ++i)
+	{
+		tmp = l->m_elements[i];
+		l->m_elements[i] = l->m_elements[l->m_count - 1 - i];
+		l->m_elements[l->m_count - 1 - i] = tmp;
+	}
+}
+
+int mk_aoc2022_day05_line_extract_crates(struct line_s* l)
+{
+	int n;
+	int i;
+
+	assert(l);
+
+	if((l->m_count + 1) % 4 != 0) return ((int)(__LINE__));
+	n = (l->m_count + 1) / 4;
+	for(i = 0; i != n; ++i)
+	{
+		l->m_elements[i] = l->m_elements[i * 4 + 1];
+	}
+	l->m_count = n;
+	return 0;
+}
+
+int mk_aoc2022_day05(char const* const input, int crane_model)
+{
+	int first;
+	struct line_s* stacks;
+	struct line_s l;
+	int stacks_count;
+	FILE* f;
+	int err;
+	int i;
+	int scanned;
+	int move_count;
+	int move_from;
+	int move_to;
+	int closed;
+
+	assert(input);
+	assert(input[0]);
+
+	first = 1;
+	stacks = NULL;
+	mk_aoc2022_day05_line_construct(&l);
+	f = fopen(input, "rb");
+	if(!f) return ((int)(__LINE__));
+	for(;;)
+	{
+		err = mk_aoc2022_day05_line_read(f, &l);
+		if(err != 0) return err;
+		if(mk_aoc2022_day05_line_is_numbers(&l))
+		{
+			break;
+		}
+		err = mk_aoc2022_day05_line_extract_crates(&l);
+		if(err != 0) return err;
+		if(first)
+		{
+			first = 0;
+			stacks_count = l.m_count;
+			stacks = malloc(stacks_count * sizeof(struct line_s));
+			if(!stacks) return ((int)(__LINE__));
+			for(i = 0; i != stacks_count; ++i)
+			{
+				mk_aoc2022_day05_line_construct(&stacks[i]);
+			}
+		}
+		if(l.m_count != stacks_count) return ((int)(__LINE__));
+		for(i = 0; i != stacks_count; ++i)
+		{
+			if(l.m_elements[i] != ' ')
+			{
+				mk_aoc2022_day05_line_append(&stacks[i], l.m_elements[i]);
+			}
+		}
+	}
+	for(i = 0; i != stacks_count; ++i)
+	{
+		mk_aoc2022_day05_line_reverse(&stacks[i]);
+	}
+	err = mk_aoc2022_day05_line_read(f, &l);
+	if(err != 0) return err;
+	if(l.m_count != 0) return ((int)(__LINE__));
+	for(;;)
+	{
+		scanned = fscanf(f, "move %d from %d to %d\x0a", &move_count, &move_from, &move_to);
+		if(scanned != 3) break;
+		if(crane_model == 9000)
+		{
+			for(i = 0; i != move_count; ++i)
+			{
+				mk_aoc2022_day05_line_append(&stacks[move_to - 1], stacks[move_from - 1].m_elements[stacks[move_from - 1].m_count - 1]);
+				--stacks[move_from - 1].m_count;
+			}
+		}
+		else if(crane_model == 9001)
+		{
+			for(i = 0; i != move_count; ++i)
+			{
+				mk_aoc2022_day05_line_append(&stacks[move_to - 1], stacks[move_from - 1].m_elements[stacks[move_from - 1].m_count - 1 - (move_count - 1) + i]);
+			}
+			stacks[move_from - 1].m_count -= move_count;
+		}
+		else
+		{
+			return ((int)(__LINE__));
+		}
+	}
+	for(i = 0; i != stacks_count; ++i)
+	{
+		printf("%.1s", &stacks[i].m_elements[stacks[i].m_count - 1]);
+	}
+	printf("\n");
+	for(i = 0; i != stacks_count; ++i)
+	{
+		mk_aoc2022_day05_line_destruct(&stacks[i]);
+	}
+	free(stacks);
+	closed = fclose(f);
+	if(closed != 0) return ((int)(__LINE__));
+	mk_aoc2022_day05_line_destruct(&l);
+	return 0;
+}
+
+int mk_aoc2022_day05a(char const* const input)
+{
+	return mk_aoc2022_day05(input, 9000);
+}
+
+int mk_aoc2022_day05b(char const* const input)
+{
+	return mk_aoc2022_day05(input, 9001);
+}
+
+
 #include <stdio.h>
 
 int main(void)
@@ -880,6 +1116,16 @@ int main(void)
 	err = mk_aoc2022_day04b("input04b.txt", &ret);
 	if(err != 0) return err;
 	printf("%d\n", ret);
+
+	printf("%s\n", "Day 5");
+	err = mk_aoc2022_day05a("input05a.txt");
+	if(err != 0) return err;
+	err = mk_aoc2022_day05a("input05b.txt");
+	if(err != 0) return err;
+	err = mk_aoc2022_day05b("input05a.txt");
+	if(err != 0) return err;
+	err = mk_aoc2022_day05b("input05b.txt");
+	if(err != 0) return err;
 
 	return 0;
 }
