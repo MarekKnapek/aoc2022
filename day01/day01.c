@@ -1124,6 +1124,352 @@ int mk_aoc2022_day06b(char const* const input, int* out)
 }
 
 
+struct tree_nodes_s;
+struct tree_node_s;
+
+void tree_nodes_construct(struct tree_nodes_s* tn);
+void tree_nodes_destruct(struct tree_nodes_s* tn);
+struct tree_node_s* tree_nodes_add_child(struct tree_nodes_s* tn, struct line_s* line);
+struct tree_node_s* tree_nodes_find_child(struct tree_nodes_s* tn, char* name, int name_len);
+
+void tree_node_construct(struct tree_node_s* tn);
+void tree_node_destruct(struct tree_node_s* tn);
+struct tree_node_s* tree_node_add_child(struct tree_node_s* tn, struct line_s* line);
+struct tree_node_s* tree_node_find_child(struct tree_node_s* tn, char* name, int name_len);
+
+struct tree_nodes_s
+{
+	int m_count;
+	int m_capacity;
+	struct tree_node_s** m_nodes;
+};
+
+struct tree_node_s
+{
+	struct line_s m_name_holder;
+	int m_is_directory;
+	int m_bytes;
+	struct tree_node_s* m_parent;
+	struct tree_nodes_s m_children;
+};
+
+void tree_nodes_construct(struct tree_nodes_s* tn)
+{
+	assert(tn);
+
+	tn->m_count = 0;
+	tn->m_capacity = 0;
+	tn->m_nodes = NULL;
+}
+
+void tree_nodes_destruct(struct tree_nodes_s* tn)
+{
+	int i;
+
+	assert(tn);
+
+	for(i = 0; i != tn->m_count; ++i)
+	{
+		tree_node_destruct(tn->m_nodes[i]);
+		free(tn->m_nodes[i]);
+	}
+	free(tn->m_nodes);
+}
+
+struct tree_node_s* tree_nodes_add_child(struct tree_nodes_s* tn, struct line_s* line)
+{
+	struct tree_node_s** nodes;
+	struct tree_node_s* node;
+
+	assert(tn);
+	assert(line);
+
+	if(tn->m_nodes == NULL || tn->m_count == tn->m_capacity)
+	{
+		if(tn->m_capacity == 0) tn->m_capacity = 4;
+		tn->m_capacity *= 2;
+		nodes = malloc(tn->m_capacity * sizeof(*nodes));
+		if(nodes == NULL) crash();
+		memcpy(nodes, tn->m_nodes, tn->m_count * sizeof(*nodes));
+		free(tn->m_nodes);
+		tn->m_nodes = nodes;
+	}
+	node = malloc(sizeof(*node));
+	if(node == NULL) crash();
+	tree_node_construct(node);
+	node->m_name_holder = *line;
+	mk_aoc2022_day05_line_construct(line);
+	tn->m_nodes[tn->m_count] = node;
+	++tn->m_count;
+	return node;
+}
+
+struct tree_node_s* tree_nodes_find_child(struct tree_nodes_s* tn, char* name, int name_len)
+{
+	int i;
+	struct tree_node_s* node;
+
+	for(i = 0; i != tn->m_count; ++i)
+	{
+		node = tn->m_nodes[i];
+		if
+		(
+			(node->m_is_directory == 1) &&
+			(node->m_name_holder.m_count - 4 == name_len) &&
+			(memcmp(node->m_name_holder.m_elements + 4, name, name_len) == 0)
+		)
+		{
+			return node;
+		}
+	}
+	crash();
+	return NULL;
+}
+
+void tree_node_construct(struct tree_node_s* tn)
+{
+	assert(tn);
+
+	mk_aoc2022_day05_line_construct(&tn->m_name_holder);
+	tn->m_is_directory = 0;
+	tn->m_bytes = 0;
+	tree_nodes_construct(&tn->m_children);
+	tn->m_parent = NULL;
+}
+
+void tree_node_destruct(struct tree_node_s* tn)
+{
+	assert(tn);
+
+	mk_aoc2022_day05_line_destruct(&tn->m_name_holder);
+	tree_nodes_destruct(&tn->m_children);
+}
+
+struct tree_node_s* tree_node_add_child(struct tree_node_s* tn, struct line_s* line)
+{
+	struct tree_node_s* child;
+
+	assert(tn);
+	assert(line);
+
+	child = tree_nodes_add_child(&tn->m_children, line);
+	child->m_parent = tn;
+	return child;
+}
+
+struct tree_node_s* tree_node_find_child(struct tree_node_s* tn, char* name, int name_len)
+{
+	return tree_nodes_find_child(&tn->m_children, name, name_len);
+}
+
+void tree_sum_small_dirs_r(struct tree_node_s* tn, int limit, int* sum)
+{
+	int i;
+	struct tree_node_s* node;
+
+	tn->m_bytes = 0;
+	for(i = 0; i != tn->m_children.m_count; ++i)
+	{
+		node = tn->m_children.m_nodes[i];
+		if(node->m_is_directory)
+		{
+			tree_sum_small_dirs_r(node, limit, sum);
+		}
+		tn->m_bytes += node->m_bytes;
+	}
+	if(tn->m_bytes < limit)
+	{
+		*sum += tn->m_bytes;
+	}
+}
+
+int tree_sum_small_dirs(struct tree_node_s* tn, int limit)
+{
+	int sum;
+
+	sum = 0;
+	tree_sum_small_dirs_r(tn, limit, &sum);
+	return sum;
+}
+
+void tree_find_dir_to_delete_r(struct tree_node_s* tn, int needs_to_delete_at_least, struct tree_node_s** smallest_big_enough)
+{
+	int i;
+	struct tree_node_s* node;
+
+	if(tn->m_bytes >= needs_to_delete_at_least && tn->m_bytes < (*smallest_big_enough)->m_bytes)
+	{
+		*smallest_big_enough = tn;
+	}
+	for(i = 0; i != tn->m_children.m_count; ++i)
+	{
+		node = tn->m_children.m_nodes[i];
+		if(node->m_is_directory)
+		{
+			tree_find_dir_to_delete_r(node, needs_to_delete_at_least, smallest_big_enough);
+		}
+	}
+}
+
+int tree_find_dir_to_delete(struct tree_node_s* tn, int fs_capacity, int update_size)
+{
+	struct tree_node_s* smallest_big_enough;
+	int free_space;
+	int needs_to_delete_at_least;
+
+	tree_sum_small_dirs(tn, 0);
+	smallest_big_enough = tn;
+	free_space = fs_capacity - tn->m_bytes;
+	needs_to_delete_at_least = update_size - free_space;
+	tree_find_dir_to_delete_r(tn, needs_to_delete_at_least, &smallest_big_enough);
+	return smallest_big_enough->m_bytes;
+}
+
+int mk_aoc2022_day07(char const* const input, int operation, int* out)
+{
+	static char const s_command_start[] = "$ ";
+	static char const s_command_cd_root[] = "$ cd /";
+	static char const s_command_cd_start[] = "$ cd ";
+	static char const s_command_ls[] = "$ ls";
+	static char const s_dir_begin[] = "dir ";
+
+	enum expecting_e
+	{
+		expecting_command,
+		expecting_ls_output
+	};
+
+	int ret;
+	struct line_s l;
+	FILE* f;
+	int err;
+	struct tree_node_s root;
+	struct tree_node_s* current;
+	enum expecting_e expecting;
+	char* folder_name;
+	int folder_name_len;
+	struct tree_node_s* tmp;
+	int scanned;
+	int bytes;
+	int closed;
+
+	assert(input);
+	assert(input[0]);
+	assert(out);
+
+	ret = 0;
+	mk_aoc2022_day05_line_construct(&l);
+	f = fopen(input, "rb");
+	if(!f) return ((int)(__LINE__));
+	err = mk_aoc2022_day05_line_read(f, &l);
+	if(err != 0) return err;
+	if(l.m_count == 0) return ((int)(__LINE__));
+	if(!(l.m_count == sizeof(s_command_cd_root) / sizeof(s_command_cd_root[0]) - 1)) return ((int)(__LINE__));
+	if(memcmp(l.m_elements, s_command_cd_root, sizeof(s_command_cd_root) / sizeof(s_command_cd_root[0]) - 1) != 0) return ((int)(__LINE__));
+	tree_node_construct(&root);
+	current = &root;
+	expecting = expecting_command;
+	for(;;)
+	{
+		err = mk_aoc2022_day05_line_read(f, &l);
+		if(err != 0) return err;
+		if(l.m_count == 0) break;
+		switch(expecting)
+		{
+			case expecting_command:
+			{
+				if(!(l.m_count >= sizeof(s_command_start) / sizeof(s_command_start[0]) - 1 + 1)) return ((int)(__LINE__));
+				if(memcmp(l.m_elements, s_command_start, sizeof(s_command_start) / sizeof(s_command_start[0]) - 1) != 0) return ((int)(__LINE__));
+				gcommand:;
+				if
+				(
+					(l.m_count == sizeof(s_command_ls) / sizeof(s_command_ls[0]) - 1) &&
+					(memcmp(l.m_elements, s_command_ls, sizeof(s_command_ls) / sizeof(s_command_ls[0]) - 1) == 0)
+				)
+				{
+					expecting = expecting_ls_output;
+				}
+				else if
+				(
+					(l.m_count > sizeof(s_command_cd_start) / sizeof(*s_command_cd_start) - 1) &&
+					(memcmp(l.m_elements, s_command_cd_start, sizeof(s_command_cd_start) / sizeof(*s_command_cd_start) - 1) == 0)
+				)
+				{
+					folder_name = l.m_elements + (sizeof(s_command_cd_start) / sizeof(*s_command_cd_start) - 1);
+					folder_name_len = l.m_count - (sizeof(s_command_cd_start) / sizeof(*s_command_cd_start) - 1);
+					if(folder_name_len == 2 && folder_name[0] == '.' && folder_name[1] == '.')
+					{
+						current = current->m_parent;
+					}
+					else
+					{
+						current = tree_node_find_child(current, folder_name, folder_name_len);
+					}
+				}
+				else
+				{
+					return ((int)(__LINE__));
+				}
+			}
+			break;
+			case expecting_ls_output:
+			{
+				if
+				(
+					(l.m_count >= sizeof(s_command_start) / sizeof(s_command_start[0]) - 1 + 1) &&
+					(memcmp(l.m_elements, s_command_start, sizeof(s_command_start) / sizeof(s_command_start[0]) - 1) == 0)
+				)
+				{
+					expecting = expecting_command;
+					goto gcommand;
+				}
+				if
+				(
+					(l.m_count > sizeof(s_dir_begin) / sizeof(s_dir_begin[0]) - 1) &&
+					(memcmp(l.m_elements, s_dir_begin, sizeof(s_dir_begin) / sizeof(s_dir_begin[0]) - 1) == 0)
+				)
+				{
+					tmp = tree_node_add_child(current, &l);
+					tmp->m_is_directory = 1;
+				}
+				else
+				{
+					scanned = sscanf(l.m_elements, "%d ", &bytes);
+					if(scanned != 1) return ((int)(__LINE__));
+					tmp = tree_node_add_child(current, &l);
+					tmp->m_bytes = bytes;
+				}
+			}
+			break;
+		}
+	}
+	if(operation == 0)
+	{
+		ret = tree_sum_small_dirs(&root, 100000);
+	}
+	else
+	{
+		ret = tree_find_dir_to_delete(&root, 70000000, 30000000);
+	}
+	tree_node_destruct(&root);
+	closed = fclose(f);
+	if(closed != 0) return ((int)(__LINE__));
+	mk_aoc2022_day05_line_destruct(&l);
+	*out = ret;
+	return 0;
+}
+
+int mk_aoc2022_day07a(char const* const input, int* out)
+{
+	return mk_aoc2022_day07(input, 0, out);
+}
+
+int mk_aoc2022_day07b(char const* const input, int* out)
+{
+	return mk_aoc2022_day07(input, 1, out);
+}
+
+
 #include <stdio.h>
 
 int main(void)
@@ -1220,6 +1566,20 @@ int main(void)
 	if(err != 0) return err;
 	printf("%d\n", ret);
 	err = mk_aoc2022_day06b("input06f.txt", &ret);
+	if(err != 0) return err;
+	printf("%d\n", ret);
+
+	printf("%s\n", "Day 7");
+	err = mk_aoc2022_day07a("input07a.txt", &ret);
+	if(err != 0) return err;
+	printf("%d\n", ret);
+	err = mk_aoc2022_day07a("input07b.txt", &ret);
+	if(err != 0) return err;
+	printf("%d\n", ret);
+	err = mk_aoc2022_day07b("input07a.txt", &ret);
+	if(err != 0) return err;
+	printf("%d\n", ret);
+	err = mk_aoc2022_day07b("input07b.txt", &ret);
 	if(err != 0) return err;
 	printf("%d\n", ret);
 
