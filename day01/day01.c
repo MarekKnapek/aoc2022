@@ -889,7 +889,7 @@ int mk_aoc2022_day05_line_read(FILE* f, struct line_s* l)
 	}
 	if(feof(f) != 0)
 	{
-		return 0;
+		goto end;
 	}
 	for(;;)
 	{
@@ -912,6 +912,9 @@ int mk_aoc2022_day05_line_read(FILE* f, struct line_s* l)
 		}
 		mk_aoc2022_day05_line_append(l, ch);
 	}
+	end:;
+	mk_aoc2022_day05_line_append(l, '\0');
+	--l->m_count;
 	return 0;
 }
 
