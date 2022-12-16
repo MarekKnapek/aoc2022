@@ -1747,6 +1747,269 @@ int mk_aoc2022_day08b(char const* const input, int* out)
 }
 
 
+struct set_s
+{
+	int m_count;
+	int m_capacity;
+	unsigned* m_elements;
+};
+
+void set_construct(struct set_s* s)
+{
+	assert(s);
+
+	s->m_count = 0;
+	s->m_capacity = 0;
+	s->m_elements = NULL;
+}
+
+void set_destruct(struct set_s* s)
+{
+	assert(s);
+
+	free(s->m_elements);
+}
+
+void set_insert(struct set_s* s, unsigned item)
+{
+	int lower;
+	int upper;
+	int pos;
+	unsigned* nelements;
+
+	assert(s);
+
+	lower = 0;
+	upper = s->m_count;
+	pos = (lower + upper) / 2;
+	while(lower != upper)
+	{
+		if(s->m_elements[pos] == item)
+		{
+			return;
+		}
+		else if(s->m_elements[pos] < item)
+		{
+			lower = pos + 1;
+		}
+		else
+		{
+			upper = pos;
+		}
+		pos = (lower + upper) / 2;
+	}
+	if(s->m_count == s->m_capacity)
+	{
+		s->m_capacity *= 2;
+		if(s->m_capacity == 0) s->m_capacity = 8;
+		nelements = malloc(s->m_capacity * sizeof(*nelements));
+		if(nelements == NULL) crash();
+		memcpy(nelements, s->m_elements, s->m_count * sizeof(*nelements));
+		free(s->m_elements);
+		s->m_elements = nelements;
+	}
+	memmove(s->m_elements + pos + 1, s->m_elements + pos, (s->m_count - pos) * sizeof(*nelements));
+	s->m_elements[pos] = item;
+	++s->m_count;
+}
+
+int mk_aoc2022_day09a(char const* const input, int* out)
+{
+	int ret;
+	struct line_s line;
+	FILE* f;
+	struct set_s set;
+	int head_x;
+	int head_y;
+	int tail_x;
+	int tail_y;
+	unsigned pos;
+	int err;
+	int scanned;
+	int n;
+	int i;
+	int distance_x;
+	int distance_y;
+	int closed;
+
+	assert(input);
+	assert(input[0]);
+	assert(out);
+
+	ret = 0;
+	mk_aoc2022_day05_line_construct(&line);
+	f = fopen(input, "rb");
+	if(!f) return ((int)(__LINE__));
+	set_construct(&set);
+	head_x = 0;
+	head_y = 0;
+	tail_x = head_x;
+	tail_y = head_y;
+	pos = ((unsigned)(((unsigned)(((unsigned)(((unsigned short)(tail_x)))) << 16)) | ((unsigned)(((unsigned short)(tail_y))))));
+	set_insert(&set, pos);
+	for(;;)
+	{
+		err = mk_aoc2022_day05_line_read(f, &line);
+		if(err != 0) return err;
+		if(line.m_count == 0) break;
+		scanned = sscanf(line.m_elements + 2, "%d", &n);
+		if(scanned != 1) crash();
+		for(i = 0; i != n; ++i)
+		{
+			switch(line.m_elements[0])
+			{
+				case 'U':
+				{
+					++head_y;
+				}
+				break;
+				case 'R':
+				{
+					++head_x;
+				}
+				break;
+				case 'D':
+				{
+					--head_y;
+				}
+				break;
+				case 'L':
+				{
+					--head_x;
+				}
+				break;
+			}
+			distance_x = head_x - tail_x;
+			distance_y = head_y - tail_y;
+			if(distance_x == +2) ++tail_x;
+			if(distance_x == -2) --tail_x;
+			if(distance_y == +2) ++tail_y;
+			if(distance_y == -2) --tail_y;
+			if((distance_x == 2 || distance_x == -2) && distance_y != 0) tail_y += distance_y;
+			if((distance_y == 2 || distance_y == -2) && distance_x != 0) tail_x += distance_x;
+			pos = ((unsigned)(((unsigned)(((unsigned)(((unsigned short)(tail_x)))) << 16)) | ((unsigned)(((unsigned short)(tail_y))))));
+			set_insert(&set, pos);
+		}
+	}
+	ret = set.m_count;
+	set_destruct(&set);
+	closed = fclose(f);
+	if(closed != 0) return ((int)(__LINE__));
+	mk_aoc2022_day05_line_destruct(&line);
+	*out = ret;
+	return 0;
+}
+
+void update_tail(int head_x, int head_y, int* tail_x, int* tail_y)
+{
+	int distance_x;
+	int distance_y;
+
+	distance_x = head_x - *tail_x;
+	distance_y = head_y - *tail_y;
+	if(distance_x == +2){ ++*tail_x; }
+	if(distance_x == -2){ --*tail_x; }
+	if(distance_y == +2){ ++*tail_y; }
+	if(distance_y == -2){ --*tail_y; }
+	if((distance_x == 2 || distance_x == -2) && (distance_y == 1 || distance_y == -1)){ *tail_y += distance_y; }
+	if((distance_y == 2 || distance_y == -2) && (distance_x == 1 || distance_x == -1)){ *tail_x += distance_x; }
+}
+
+int mk_aoc2022_day09b(char const* const input, int* out)
+{
+	enum
+	{
+		tail_count = 9
+	};
+
+	int ret;
+	struct line_s line;
+	FILE* f;
+	struct set_s set;
+	int head_x;
+	int head_y;
+	int it;
+	int tail_x[tail_count];
+	int tail_y[tail_count];
+	unsigned pos;
+	int err;
+	int scanned;
+	int n;
+	int i;
+	int closed;
+
+	assert(input);
+	assert(input[0]);
+	assert(out);
+
+	ret = 0;
+	mk_aoc2022_day05_line_construct(&line);
+	f = fopen(input, "rb");
+	if(!f) return ((int)(__LINE__));
+	set_construct(&set);
+	head_x = 0;
+	head_y = 0;
+	for(it = 0; it != tail_count; ++it)
+	{
+		tail_x[it] = head_x;
+		tail_y[it] = head_y;
+	}
+	pos = ((unsigned)(((unsigned)(((unsigned)(((unsigned short)(((short)(tail_x[tail_count - 1])))))) << 16)) | ((unsigned)(((unsigned short)(((short)(tail_y[tail_count - 1]))))))));
+	set_insert(&set, pos);
+	for(;;)
+	{
+		err = mk_aoc2022_day05_line_read(f, &line);
+		if(err != 0) return err;
+		if(line.m_count == 0) break;
+		scanned = sscanf(line.m_elements + 2, "%d", &n);
+		if(scanned != 1) crash();
+		for(i = 0; i != n; ++i)
+		{
+			switch(line.m_elements[0])
+			{
+				case 'U':
+				{
+					++head_y;
+				}
+				break;
+				case 'R':
+				{
+					++head_x;
+				}
+				break;
+				case 'D':
+				{
+					--head_y;
+				}
+				break;
+				case 'L':
+				{
+					--head_x;
+				}
+				break;
+				default:
+					crash();
+				break;
+			}
+			update_tail(head_x, head_y, &tail_x[0], &tail_y[0]);
+			for(it = 0; it != tail_count - 1; ++it)
+			{
+				update_tail(tail_x[it], tail_y[it], &tail_x[it + 1], &tail_y[it + 1]);
+			}
+			pos = ((unsigned)(((unsigned)(((unsigned)(((unsigned short)(((short)(tail_x[tail_count - 1])))))) << 16)) | ((unsigned)(((unsigned short)(((short)(tail_y[tail_count - 1]))))))));
+			set_insert(&set, pos);
+		}
+	}
+	ret = set.m_count;
+	set_destruct(&set);
+	closed = fclose(f);
+	if(closed != 0) return ((int)(__LINE__));
+	mk_aoc2022_day05_line_destruct(&line);
+	*out = ret;
+	return 0;
+}
+
+
 #include <stdio.h>
 
 int main(void)
@@ -1871,6 +2134,23 @@ int main(void)
 	if(err != 0) return err;
 	printf("%d\n", ret);
 	err = mk_aoc2022_day08b("input08b.txt", &ret);
+	if(err != 0) return err;
+	printf("%d\n", ret);
+
+	printf("%s\n", "Day 9");
+	err = mk_aoc2022_day09a("input09a.txt", &ret);
+	if(err != 0) return err;
+	printf("%d\n", ret);
+	err = mk_aoc2022_day09a("input09b.txt", &ret);
+	if(err != 0) return err;
+	printf("%d\n", ret);
+	err = mk_aoc2022_day09b("input09a.txt", &ret);
+	if(err != 0) return err;
+	printf("%d\n", ret);
+	err = mk_aoc2022_day09b("input09c.txt", &ret);
+	if(err != 0) return err;
+	printf("%d\n", ret);
+	err = mk_aoc2022_day09b("input09b.txt", &ret);
 	if(err != 0) return err;
 	printf("%d\n", ret);
 
