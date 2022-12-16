@@ -1473,6 +1473,280 @@ int mk_aoc2022_day07b(char const* const input, int* out)
 }
 
 
+struct lines_s
+{
+	int m_count;
+	int m_capacity;
+	struct line_s* m_elements;
+};
+
+void lines_construct(struct lines_s* ls)
+{
+	assert(ls);
+
+	ls->m_count = 0;
+	ls->m_capacity = 0;
+	ls->m_elements = NULL;
+}
+
+void lines_destruct(struct lines_s* ls)
+{
+	int i;
+
+	assert(ls);
+
+	for(i = 0; i != ls->m_count; ++i)
+	{
+		mk_aoc2022_day05_line_destruct(&ls->m_elements[i]);
+	}
+}
+
+void lines_add(struct lines_s* ls, struct line_s* l)
+{
+	struct line_s* new_elements;
+
+	assert(ls);
+
+	if(ls->m_count == ls->m_capacity)
+	{
+		ls->m_capacity *= 2;
+		if(ls->m_capacity == 0) ls->m_capacity = 8;
+		new_elements = malloc(ls->m_capacity * sizeof(*new_elements));
+		if(new_elements == NULL) crash();
+		memcpy(new_elements, ls->m_elements, ls->m_count * sizeof(*new_elements));
+		free(ls->m_elements);
+		ls->m_elements = new_elements;
+	}
+	ls->m_elements[ls->m_count] = *l;
+	++ls->m_count;
+	mk_aoc2022_day05_line_construct(l);
+}
+
+int forest_algo_a(struct lines_s* lines)
+{
+	int height;
+	int width;
+	int i;
+	int j;
+	int ret;
+	int tall;
+	int visible;
+	int k;
+
+	assert(lines);
+	assert(lines->m_count != 0);
+
+	height = lines->m_count;
+	width = lines->m_elements[0].m_count;
+	if(!(height >= 3 && height >= 3)) crash();
+	for(i = 0; i != height; ++i)
+	{
+		for(j = 0; j != width; ++j)
+		{
+			if(!(lines->m_elements[i].m_elements[j] >= '0' && lines->m_elements[i].m_elements[j] <= '9')) crash();
+		}
+	}
+	ret = width * 2 + height * 2 - 4;
+	for(i = 1; i != height - 1; ++i)
+	{
+		for(j = 1; j != width - 1; ++j)
+		{
+			tall = (lines->m_elements[i].m_elements[j] - '0');
+			visible = 1;
+			for(k = 0; k != i; ++k)
+			{
+				if((lines->m_elements[i - k - 1].m_elements[j] - '0') >= tall)
+				{
+					visible = 0;
+					break;
+				}
+			}
+			if(visible == 1)
+			{
+				++ret;
+				continue;
+			}
+			visible = 1;
+			for(k = 0; k != height - i - 1; ++k)
+			{
+				if((lines->m_elements[i + k + 1].m_elements[j] - '0') >= tall)
+				{
+					visible = 0;
+					break;
+				}
+			}
+			if(visible == 1)
+			{
+				++ret;
+				continue;
+			}
+			visible = 1;
+			for(k = 0; k != j; ++k)
+			{
+				if((lines->m_elements[i].m_elements[j - k - 1] - '0') >= tall)
+				{
+					visible = 0;
+					break;
+				}
+			}
+			if(visible == 1)
+			{
+				++ret;
+				continue;
+			}
+			visible = 1;
+			for(k = 0; k != width - j - 1; ++k)
+			{
+				if((lines->m_elements[i].m_elements[j + k + 1] - '0') >= tall)
+				{
+					visible = 0;
+					break;
+				}
+			}
+			if(visible == 1)
+			{
+				++ret;
+				continue;
+			}
+		}
+	}
+	return ret;
+}
+
+int forest_tree_score(struct lines_s* lines, int h, int w)
+{
+	int height;
+	int width;
+	int tall;
+	int count;
+	int i;
+	int total;
+
+	height = lines->m_count;
+	width = lines->m_elements[0].m_count;
+	tall = lines->m_elements[h].m_elements[w];
+	count = 0;
+	for(i = 0; i != h; ++i)
+	{
+		++count;
+		if(lines->m_elements[h - 1 - i].m_elements[w] >= tall) break;
+	}
+	total = count;
+	count = 0;
+	for(i = 0; i != height - 1 - h; ++i)
+	{
+		++count;
+		if(lines->m_elements[h + 1 + i].m_elements[w] >= tall) break;
+	}
+	total *= count;
+	count = 0;
+	for(i = 0; i != w; ++i)
+	{
+		++count;
+		if(lines->m_elements[h].m_elements[w - 1 - i] >= tall) break;
+	}
+	total *= count;
+	count = 0;
+	for(i = 0; i != width - 1 - w; ++i)
+	{
+		++count;
+		if(lines->m_elements[h].m_elements[w + 1 + i] >= tall) break;
+	}
+	total *= count;
+	return total;
+}
+
+int forest_algo_b(struct lines_s* lines)
+{
+	int height;
+	int width;
+	int i;
+	int j;
+	int best_score;
+	int score;
+
+	assert(lines);
+	assert(lines->m_count != 0);
+
+	height = lines->m_count;
+	width = lines->m_elements[0].m_count;
+	if(!(height >= 3 && height >= 3)) crash();
+	for(i = 0; i != height; ++i)
+	{
+		for(j = 0; j != width; ++j)
+		{
+			if(!(lines->m_elements[i].m_elements[j] >= '0' && lines->m_elements[i].m_elements[j] <= '9')) crash();
+		}
+	}
+	best_score = 0;
+	for(i = 0; i != height; ++i)
+	{
+		for(j = 0; j != width; ++j)
+		{
+			score = forest_tree_score(lines, i, j);
+			if(score > best_score) best_score = score;
+		}
+	}
+	return best_score;
+}
+
+int mk_aoc2022_day08(char const* const input, int algo, int* out)
+{
+	int ret;
+	struct lines_s lines;
+	struct line_s line;
+	FILE* f;
+	int err;
+	int closed;
+
+	assert(input);
+	assert(input[0]);
+	assert(out);
+
+	ret = 0;
+	lines_construct(&lines);
+	mk_aoc2022_day05_line_construct(&line);
+	f = fopen(input, "rb");
+	if(!f) return ((int)(__LINE__));
+	err = mk_aoc2022_day05_line_read(f, &line);
+	if(err != 0) return err;
+	if(line.m_count == 0) return ((int)(__LINE__));
+	lines_add(&lines, &line);
+	for(;;)
+	{
+		err = mk_aoc2022_day05_line_read(f, &line);
+		if(err != 0) return err;
+		if(line.m_count == 0) break;
+		if(line.m_count != lines.m_elements[0].m_count) return ((int)(__LINE__));
+		lines_add(&lines, &line);
+	}
+	closed = fclose(f);
+	if(closed != 0) return ((int)(__LINE__));
+	mk_aoc2022_day05_line_destruct(&line);
+	if(algo == 0)
+	{
+		ret = forest_algo_a(&lines);
+	}
+	else
+	{
+		ret = forest_algo_b(&lines);
+	}
+	lines_destruct(&lines);
+	*out = ret;
+	return 0;
+}
+
+int mk_aoc2022_day08a(char const* const input, int* out)
+{
+	return mk_aoc2022_day08(input, 0, out);
+}
+
+int mk_aoc2022_day08b(char const* const input, int* out)
+{
+	return mk_aoc2022_day08(input, 1, out);
+}
+
+
 #include <stdio.h>
 
 int main(void)
@@ -1583,6 +1857,20 @@ int main(void)
 	if(err != 0) return err;
 	printf("%d\n", ret);
 	err = mk_aoc2022_day07b("input07b.txt", &ret);
+	if(err != 0) return err;
+	printf("%d\n", ret);
+
+	printf("%s\n", "Day 8");
+	err = mk_aoc2022_day08a("input08a.txt", &ret);
+	if(err != 0) return err;
+	printf("%d\n", ret);
+	err = mk_aoc2022_day08a("input08b.txt", &ret);
+	if(err != 0) return err;
+	printf("%d\n", ret);
+	err = mk_aoc2022_day08b("input08a.txt", &ret);
+	if(err != 0) return err;
+	printf("%d\n", ret);
+	err = mk_aoc2022_day08b("input08b.txt", &ret);
 	if(err != 0) return err;
 	printf("%d\n", ret);
 
