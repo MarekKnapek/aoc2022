@@ -1499,6 +1499,7 @@ void lines_destruct(struct lines_s* ls)
 	{
 		mk_aoc2022_day05_line_destruct(&ls->m_elements[i]);
 	}
+	free(ls->m_elements);
 }
 
 void lines_add(struct lines_s* ls, struct line_s* l)
