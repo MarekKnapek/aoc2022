@@ -2010,6 +2010,263 @@ int mk_aoc2022_day09b(char const* const input, int* out)
 }
 
 
+struct instruction_addx_s
+{
+	int m_param;
+};
+
+struct instruction_noop_s
+{
+	int m_dummy;
+};
+
+union instruction_u
+{
+	struct instruction_addx_s m_addx;
+	struct instruction_noop_s m_noop;
+};
+
+enum instruction_e
+{
+	addx,
+	noop
+};
+
+struct instruction_s
+{
+	enum instruction_e m_type;
+	union instruction_u m_instr;
+};
+
+struct program_s
+{
+	int m_count;
+	int m_capacity;
+	struct instruction_s* m_instrs;
+};
+
+struct cpu_s
+{
+	int m_register_x;
+};
+
+struct computer_s
+{
+	struct cpu_s m_cpu;
+	struct program_s m_program;
+	int m_pc;
+	int m_micro_step;
+	int m_ticks;
+};
+
+void program_construct(struct program_s* program)
+{
+	assert(program);
+
+	program->m_count = 0;
+	program->m_capacity = 0;
+	program->m_instrs = NULL;
+}
+
+void program_destruct(struct program_s* program)
+{
+	assert(program);
+
+	free(program->m_instrs);
+}
+
+void program_append(struct program_s* program, struct instruction_s* instr)
+{
+	struct instruction_s* ninstrs;
+
+	assert(program);
+	assert(instr);
+
+	if(program->m_count == program->m_capacity)
+	{
+		program->m_capacity *= 2;
+		if(program->m_capacity == 0) program->m_capacity = 8;
+		ninstrs = malloc(program->m_capacity * sizeof(*ninstrs));
+		if(ninstrs == NULL) crash();
+		memcpy(ninstrs, program->m_instrs, program->m_count * sizeof(*ninstrs));
+		free(program->m_instrs);
+		program->m_instrs = ninstrs;
+	}
+	program->m_instrs[program->m_count] = *instr;
+	++program->m_count;
+}
+
+void computer_construct(struct computer_s* c)
+{
+	assert(c);
+
+	c->m_cpu.m_register_x = 1;
+	program_construct(&c->m_program);
+	c->m_pc = 0;
+	c->m_micro_step = 0;
+	c->m_ticks = 0;
+}
+
+void computer_destruct(struct computer_s* c)
+{
+	assert(c);
+
+	program_destruct(&c->m_program);
+}
+
+void computer_tick(struct computer_s* c)
+{
+	assert(c);
+
+	++c->m_ticks;
+	switch(c->m_program.m_instrs[c->m_pc].m_type)
+	{
+		case addx:
+		{
+			switch(c->m_micro_step)
+			{
+				case 0:
+				{
+					++c->m_micro_step;
+				}
+				break;
+				case 1:
+				{
+					c->m_cpu.m_register_x += c->m_program.m_instrs[c->m_pc].m_instr.m_addx.m_param;
+					c->m_micro_step = 0;
+					++c->m_pc;
+				}
+				break;
+				default:
+				{
+					assert(0);
+				}
+				break;
+			}
+		}
+		break;
+		case noop:
+		{
+			assert(c->m_micro_step == 0);
+			++c->m_pc;
+		}
+		break;
+		default:
+		{
+			assert(0);
+		}
+		break;
+	}
+}
+
+struct instruction_s parse_instruction(struct line_s* line)
+{
+	static char const s_noop[] = "noop";
+	static char const s_addx[] = "addx ";
+
+	struct instruction_s instr;
+	int scanned;
+
+	assert(line);
+
+	if((line->m_count == (sizeof(s_noop) / sizeof(*s_noop) - 1)) && (memcmp(line->m_elements, s_noop, (sizeof(s_noop) / sizeof(*s_noop) - 1)) == 0))
+	{
+		instr.m_type = noop;
+	}
+	else if((line->m_count > (sizeof(s_addx) / sizeof(*s_addx) - 1)) && (memcmp(line->m_elements, s_addx, (sizeof(s_addx) / sizeof(*s_addx) - 1)) == 0))
+	{
+		instr.m_type = addx;
+		scanned = sscanf(line->m_elements + (sizeof(s_addx) / sizeof(*s_addx) - 1), "%d", &instr.m_instr.m_addx.m_param);
+		if(scanned != 1) crash();
+	}
+	return instr;
+}
+
+int mk_aoc2022_day10(char const* const input, int variant, int* out)
+{
+	struct computer_s c;
+	int ret;
+	struct line_s line;
+	FILE* f;
+	int err;
+	struct instruction_s instr;
+	int i;
+	int j;
+	int closed;
+
+	assert(input);
+	assert(input[0]);
+	assert(out);
+
+	computer_construct(&c);
+	ret = 0;
+	mk_aoc2022_day05_line_construct(&line);
+	f = fopen(input, "rb");
+	if(!f) return ((int)(__LINE__));
+	for(;;)
+	{
+		err = mk_aoc2022_day05_line_read(f, &line);
+		if(err != 0) return err;
+		if(line.m_count == 0) break;
+		instr = parse_instruction(&line);
+		program_append(&c.m_program, &instr);
+	}
+	closed = fclose(f);
+	if(closed != 0) return ((int)(__LINE__));
+	mk_aoc2022_day05_line_destruct(&line);
+	if(variant == 0)
+	{
+		++c.m_ticks;
+		for(i = 0; i != 20-1; ++i)
+		{
+			computer_tick(&c);
+		}
+		ret = c.m_ticks * c.m_cpu.m_register_x;
+		for(j = 0; j != 5; ++j)
+		{
+			for(i = 0; i != 40; ++i)
+			{
+				computer_tick(&c);
+			}
+			ret += c.m_ticks * c.m_cpu.m_register_x;
+		}
+	}
+	else
+	{
+		for(j = 0; j != 6; ++j)
+		{
+			for(i = 0; i != 40; ++i)
+			{
+				if(i >= c.m_cpu.m_register_x - 1 && i <= c.m_cpu.m_register_x + 1)
+				{
+					printf("#");
+				}
+				else
+				{
+					printf(" ");
+				}
+				computer_tick(&c);
+			}
+			printf("\n");
+		}
+	}
+	printf("\n");
+	computer_destruct(&c);
+	*out = ret;
+	return 0;
+}
+
+int mk_aoc2022_day10a(char const* const input, int* out)
+{
+	return mk_aoc2022_day10(input, 0, out);
+}
+
+int mk_aoc2022_day10b(char const* const input, int* out)
+{
+	return mk_aoc2022_day10(input, 1, out);
+}
+
+
 #include <stdio.h>
 
 int main(void)
@@ -2153,6 +2410,18 @@ int main(void)
 	err = mk_aoc2022_day09b("input09b.txt", &ret);
 	if(err != 0) return err;
 	printf("%d\n", ret);
+
+	printf("%s\n", "Day 10");
+	err = mk_aoc2022_day10a("input10a.txt", &ret);
+	if(err != 0) return err;
+	printf("%d\n", ret);
+	err = mk_aoc2022_day10a("input10b.txt", &ret);
+	if(err != 0) return err;
+	printf("%d\n", ret);
+	err = mk_aoc2022_day10b("input10a.txt", &ret);
+	if(err != 0) return err;
+	err = mk_aoc2022_day10b("input10b.txt", &ret);
+	if(err != 0) return err;
 
 	return 0;
 }
