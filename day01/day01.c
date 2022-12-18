@@ -1,8 +1,9 @@
 #define _CRT_SECURE_NO_WARNINGS
 
 
-#include <stddef.h>
 #include <assert.h>
+#include <limits.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -2268,6 +2269,482 @@ int mk_aoc2022_day10b(char const* const input, int* out)
 }
 
 
+struct ints_s
+{
+	int m_count;
+	int m_capacity;
+	int* m_elements;
+};
+
+void ints_construct(struct ints_s* ints)
+{
+	assert(ints);
+
+	ints->m_count = 0;
+	ints->m_capacity = 0;
+	ints->m_elements = NULL;
+}
+
+void ints_destruct(struct ints_s* ints)
+{
+	assert(ints);
+
+	free(ints->m_elements);
+}
+
+void ints_append(struct ints_s* ints, int x)
+{
+	int* nelems;
+
+	assert(ints);
+
+	if(ints->m_count == ints->m_capacity)
+	{
+		ints->m_capacity *= 2;
+		if(ints->m_capacity == 0) ints->m_capacity = 8;
+		nelems = malloc(ints->m_capacity * sizeof(*nelems));
+		if(!nelems) crash();
+		memcpy(nelems, ints->m_elements, ints->m_count * sizeof(*nelems));
+		free(ints->m_elements);
+		ints->m_elements = nelems;
+	}
+	ints->m_elements[ints->m_count] = x;
+	++ints->m_count;
+}
+
+void ints_reverse(struct ints_s* ints)
+{
+	int i;
+	int tmp;
+
+	assert(ints);
+
+	for(i = 0; i != ints->m_count / 2; ++i)
+	{
+		tmp = ints->m_elements[i];
+		ints->m_elements[i] = ints->m_elements[ints->m_count - 1 - i];
+		ints->m_elements[ints->m_count - 1 - i] = tmp;
+	}
+}
+
+
+void ints_pop(struct ints_s* ints)
+{
+	assert(ints);
+	assert(ints->m_count != 0);
+
+	--ints->m_count;
+}
+
+enum math_operation_e
+{
+	math_add,
+	math_sub,
+	math_mul,
+	math_div
+};
+
+#define math_use_old (-999999)
+
+struct monkey_s
+{
+	struct ints_s m_items;
+	enum math_operation_e m_worry_math;
+	int m_worry_constant;
+	int m_throw_logic_param;
+	int m_true_idx;
+	int m_false_idx;
+	int m_curiosity;
+};
+
+void monkey_construct(struct monkey_s* monkey)
+{
+	assert(monkey);
+
+	ints_construct(&monkey->m_items);
+	monkey->m_curiosity = 0;
+}
+
+void monkey_destruct(struct monkey_s* monkey)
+{
+	assert(monkey);
+
+	ints_destruct(&monkey->m_items);
+}
+
+struct monkeys_s
+{
+	int m_count;
+	int m_capacity;
+	struct monkey_s* m_elements;
+};
+
+void monkeys_construct(struct monkeys_s* monkeys)
+{
+	assert(monkeys);
+
+	monkeys->m_count = 0;
+	monkeys->m_capacity = 0;
+	monkeys->m_elements = NULL;
+}
+
+void monkeys_destruct(struct monkeys_s* monkeys)
+{
+	int i;
+
+	assert(monkeys);
+
+	for(i = 0; i != monkeys->m_count; ++i)
+	{
+		monkey_destruct(&monkeys->m_elements[i]);
+	}
+	free(monkeys->m_elements);
+}
+
+void monkeys_add(struct monkeys_s* monkeys, struct monkey_s* monkey)
+{
+	struct monkey_s* nelems;
+
+	assert(monkeys);
+	assert(monkey);
+
+	if(monkeys->m_count == monkeys->m_capacity)
+	{
+		monkeys->m_capacity *= 2;
+		if(monkeys->m_capacity == 0) monkeys->m_capacity = 8;
+		nelems = malloc(monkeys->m_capacity * sizeof(*nelems));
+		if(!nelems) crash();
+		memcpy(nelems, monkeys->m_elements, monkeys->m_count * sizeof(*nelems));
+		free(monkeys->m_elements);
+		monkeys->m_elements = nelems;
+	}
+	monkeys->m_elements[monkeys->m_count] = *monkey;
+	++monkeys->m_count;
+}
+
+void parse_int(char const* const start, char const* const end, int* const err, char const** const nend, signed int* const value)
+{
+	#define bool_t int
+
+	#define s_false ((bool_t)(0))
+	#define s_true ((bool_t)(1))
+	#define s_err_no ((int)(0))
+	#define s_err_invalid ((int)(1))
+	#define s_err_overflow ((int)(2))
+	#define s_minus ((char)('-'))
+	#define s_border_pos_val ((unsigned int)(((unsigned int)(((signed int)(INT_MAX)))) / ((unsigned int)(10))))
+	#define s_border_pos_dig ((unsigned int)(((unsigned int)(((signed int)(INT_MAX)))) % ((unsigned int)(10))))
+	#define s_border_neg_val ((unsigned int)(((unsigned int)(((unsigned int)(((signed int)(-((signed int)(((signed int)(INT_MIN)) + ((signed int)(16)))))))) + ((unsigned int)(16)))) / ((unsigned int)(10))))
+	#define s_border_neg_dig ((unsigned int)(((unsigned int)(((unsigned int)(((signed int)(-((signed int)(((signed int)(INT_MIN)) + ((signed int)(16)))))))) + ((unsigned int)(16)))) % ((unsigned int)(10))))
+	#define s_neg_pos_diff ((unsigned int)(((signed int)(((signed int)(-((signed int)(((signed int)(INT_MIN)) + ((signed int)(16)))))) - ((signed int)(((signed int)(INT_MAX)) - ((signed int)(16))))))))
+	
+	static char const s_digits[] = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9'};
+
+	char const* it;
+	bool_t negative;
+	bool_t overflow;
+	unsigned int val;
+	char ch;
+	int i;
+	signed int ret;
+
+	assert(start);
+	assert(end);
+	assert(end >= start);
+	assert(err);
+	assert(nend);
+	assert(value);
+	assert(sizeof(s_digits) / sizeof(*s_digits) == 10);
+	assert(((signed int)(-((signed int)(((signed int)(INT_MIN)) + ((signed int)(16)))))) >= ((signed int)(((signed int)(INT_MAX)) - ((signed int)(16)))));
+	assert(((unsigned int)(((unsigned int)(UINT_MAX)) - ((unsigned int)(16)))) >= ((unsigned int)(((signed int)(-((signed int)(((signed int)(INT_MIN)) + ((signed int)(16)))))))));
+
+	it = start;
+	negative = s_false;
+	if(it != end)
+	{
+		overflow = s_false;
+		val = ((unsigned int)(0));
+		if(*it == s_minus)
+		{
+			negative = s_true;
+			++it;
+		}
+		for(; it != end; ++it)
+		{
+			ch = *it;
+			for(i = 0; i != 10; ++i)
+			{
+				if(ch == s_digits[i])
+				{
+					break;
+				}
+			}
+			if(i == 10)
+			{
+				break;
+			}
+			if(!overflow)
+			{
+				if(negative ? ((val < s_border_neg_val) || (val == s_border_neg_val && i <= s_border_neg_dig)) : ((val < s_border_pos_val) || (val == s_border_pos_val && i <= s_border_pos_dig)))
+				{
+					val = ((unsigned int)(((unsigned int)(val * ((unsigned int)(10)))) + ((unsigned int)(i))));
+				}
+				else
+				{
+					overflow = s_true;
+				}
+			}
+		}
+	}
+	if((it - start) == (negative ? 1 : 0))
+	{
+		*err = s_err_invalid;
+		*nend = start;
+	}
+	else if(overflow)
+	{
+		*err = s_err_overflow;
+		*nend = it;
+	}
+	else
+	{
+		if(negative)
+		{
+			if(val <= s_neg_pos_diff)
+			{
+				ret = ((signed int)(-((signed int)(val))));
+			}
+			else
+			{
+				ret = ((signed int)(((signed int)(-((signed int)(((unsigned int)(val - s_neg_pos_diff)))))) - ((signed int)(s_neg_pos_diff))));
+			}
+		}
+		else
+		{
+			ret = ((signed int)(val));
+		}
+		*err = s_err_no;
+		*nend = it;
+		*value = ret;
+	}
+
+	#undef bool_t
+	#undef s_false
+	#undef s_true
+	#undef s_err_no
+	#undef s_err_invalid
+	#undef s_err_overflow
+	#undef s_minus
+	#undef s_border_pos_val
+	#undef s_border_pos_dig
+	#undef s_border_neg_val
+	#undef s_border_neg_dig
+	#undef s_neg_pos_diff
+}
+
+int parse_monkey(FILE* f, struct monkey_s* monkey)
+{
+	static char const s_monkey_header[] = "Monkey ";
+	static char const s_monkey_footer[] = ":";
+	static char const s_starting_items_header[] = "  Starting items: ";
+	static char const s_starting_items_separator[] = ", ";
+	static char const s_operation_header[] = "  Operation: new = old ";
+	static char const s_operation_add[] = "+ ";
+	static char const s_operation_mul[] = "* ";
+	static char const s_throw_header[] = "  Test: divisible by ";
+	static char const s_true_header[] = "    If true: throw to monkey ";
+	static char const s_false_header[] = "    If false: throw to monkey ";
+
+	int err;
+	struct line_s line;
+	char const* nend;
+	int val;
+
+	assert(f);
+	assert(monkey);
+
+	monkey_construct(monkey);
+
+	mk_aoc2022_day05_line_construct(&line);
+
+	err = mk_aoc2022_day05_line_read(f, &line);
+	if(err != 0) return err;
+	if(!(memcmp(line.m_elements, s_monkey_header, sizeof(s_monkey_header) / sizeof(*s_monkey_header) - 1) == 0)) return ((int)(__LINE__));
+	parse_int(line.m_elements + sizeof(s_monkey_header) / sizeof(*s_monkey_header) - 1, line.m_elements + line.m_count - (sizeof(s_monkey_footer) / sizeof(*s_monkey_footer) - 1), &err, &nend, &val);
+	if(err != 0) return err;
+	if(line.m_count - (nend - line.m_elements) != sizeof(s_monkey_footer) / sizeof(*s_monkey_footer) - 1) return ((int)(__LINE__));
+	if(!(memcmp(nend, s_monkey_footer, sizeof(s_monkey_footer) / sizeof(*s_monkey_footer) - 1) == 0)) return ((int)(__LINE__));
+
+	err = mk_aoc2022_day05_line_read(f, &line);
+	if(err != 0) return err;
+	if(!(memcmp(line.m_elements, s_starting_items_header, sizeof(s_starting_items_header) / sizeof(*s_starting_items_header) - 1) == 0)) return ((int)(__LINE__));
+	nend = line.m_elements + (sizeof(s_starting_items_header) / sizeof(*s_starting_items_header) - 1);
+	parse_int(nend, line.m_elements + line.m_count, &err, &nend, &val);
+	if(err != 0) return err;
+	ints_append(&monkey->m_items, val);
+	while(nend != line.m_elements + line.m_count)
+	{
+		if(!(memcmp(nend, s_starting_items_separator, sizeof(s_starting_items_separator) / sizeof(*s_starting_items_separator) - 1) == 0)) return ((int)(__LINE__));
+		nend += (sizeof(s_starting_items_separator) / sizeof(*s_starting_items_separator) - 1);
+		parse_int(nend, line.m_elements + line.m_count, &err, &nend, &val);
+		if(err != 0) return err;
+		ints_append(&monkey->m_items, val);
+	}
+
+	err = mk_aoc2022_day05_line_read(f, &line);
+	if(err != 0) return err;
+	if(!(memcmp(line.m_elements, s_operation_header, sizeof(s_operation_header) / sizeof(*s_operation_header) - 1) == 0)) return ((int)(__LINE__));
+	if(memcmp(line.m_elements + (sizeof(s_operation_header) / sizeof(*s_operation_header) - 1), s_operation_add, sizeof(s_operation_add) / sizeof(*s_operation_add) - 1) == 0)
+	{
+		monkey->m_worry_math = math_add;
+	}
+	else if(memcmp(line.m_elements + (sizeof(s_operation_header) / sizeof(*s_operation_header) - 1), s_operation_mul, sizeof(s_operation_mul) / sizeof(*s_operation_mul) - 1) == 0)
+	{
+		monkey->m_worry_math = math_mul;
+	}
+	else
+	{
+		return ((int)(__LINE__));
+	}
+	parse_int(line.m_elements + (sizeof(s_operation_header) / sizeof(*s_operation_header) - 1) + 2, line.m_elements + line.m_count, &err, &nend, &val);
+	if(err == 0)
+	{
+		assert(val != math_use_old);
+		monkey->m_worry_constant = val;
+	}
+	else
+	{
+		monkey->m_worry_constant = math_use_old;
+	}
+
+	err = mk_aoc2022_day05_line_read(f, &line);
+	if(err != 0) return err;
+	if(!(memcmp(line.m_elements, s_throw_header, sizeof(s_throw_header) / sizeof(*s_throw_header) - 1) == 0)) return ((int)(__LINE__));
+	parse_int(line.m_elements + (sizeof(s_throw_header) / sizeof(*s_throw_header) - 1), line.m_elements + line.m_count, &err, &nend, &val);
+	if(err != 0) return err;
+	monkey->m_throw_logic_param = val;
+
+	err = mk_aoc2022_day05_line_read(f, &line);
+	if(err != 0) return err;
+	if(!(memcmp(line.m_elements, s_true_header, sizeof(s_true_header) / sizeof(*s_true_header) - 1) == 0)) return ((int)(__LINE__));
+	parse_int(line.m_elements + (sizeof(s_true_header) / sizeof(*s_true_header) - 1), line.m_elements + line.m_count, &err, &nend, &val);
+	if(err != 0) return err;
+	monkey->m_true_idx = val;
+
+	err = mk_aoc2022_day05_line_read(f, &line);
+	if(err != 0) return err;
+	if(!(memcmp(line.m_elements, s_false_header, sizeof(s_false_header) / sizeof(*s_false_header) - 1) == 0)) return ((int)(__LINE__));
+	parse_int(line.m_elements + (sizeof(s_false_header) / sizeof(*s_false_header) - 1), line.m_elements + line.m_count, &err, &nend, &val);
+	if(err != 0) return err;
+	monkey->m_false_idx = val;
+
+	mk_aoc2022_day05_line_destruct(&line);
+
+	return 0;
+}
+
+int monkeys_play_game(struct monkeys_s* monkeys)
+{
+	int iround;
+	int imonkey;
+	struct monkey_s* monkey;
+	int worry;
+	int curiosity[2];
+	int ret;
+
+	assert(monkeys);
+
+	for(iround = 0; iround != 20; ++iround)
+	{
+		for(imonkey = 0; imonkey != monkeys->m_count; ++imonkey)
+		{
+			monkey = &monkeys->m_elements[imonkey];
+			monkey->m_curiosity += monkey->m_items.m_count;
+			ints_reverse(&monkey->m_items);
+			while(monkey->m_items.m_count != 0)
+			{
+				worry = monkey->m_items.m_elements[monkey->m_items.m_count - 1];
+				ints_pop(&monkey->m_items);
+				if(monkey->m_worry_math == math_add)
+				{
+					if(monkey->m_worry_constant == math_use_old)
+					{
+						worry += worry;
+					}
+					else
+					{
+						worry += monkey->m_worry_constant;
+					}
+				}
+				else if(monkey->m_worry_math == math_mul)
+				{
+					if(monkey->m_worry_constant == math_use_old)
+					{
+						worry *= worry;
+					}
+					else
+					{
+						worry *= monkey->m_worry_constant;
+					}
+				}
+				worry /= 3;
+				ints_append(&monkeys->m_elements[((worry % monkey->m_throw_logic_param) == 0) ? (monkey->m_true_idx) : (monkey->m_false_idx)].m_items, worry);
+			}
+		}
+	}
+	curiosity[0] = 0;
+	curiosity[1] = 0;
+	for(imonkey = 0; imonkey != monkeys->m_count; ++imonkey)
+	{
+		monkey = &monkeys->m_elements[imonkey];
+		if(monkey->m_curiosity > curiosity[0])
+		{
+			curiosity[1] = curiosity[0];
+			curiosity[0] = monkey->m_curiosity;
+		}
+		else if(monkey->m_curiosity > curiosity[1])
+		{
+			curiosity[1] = monkey->m_curiosity;
+		}
+	}
+	ret = curiosity[0] * curiosity[1];
+	return ret;
+}
+
+int mk_aoc2022_day11a(char const* const input, int* out)
+{
+	FILE* f;
+	struct monkeys_s monkeys;
+	struct monkey_s monkey;
+	int err;
+	struct line_s line;
+	int closed;
+
+	assert(input);
+	assert(input[0]);
+	assert(out);
+
+	f = fopen(input, "rb");
+	if(!f) return ((int)(__LINE__));
+	monkeys_construct(&monkeys);
+	mk_aoc2022_day05_line_construct(&line);
+	for(;;)
+	{
+		err = parse_monkey(f, &monkey);
+		if(err != 0) break;
+		monkeys_add(&monkeys, &monkey);
+		err = mk_aoc2022_day05_line_read(f, &line);
+		if(err != 0) break;
+	}
+	mk_aoc2022_day05_line_destruct(&line);
+	closed = fclose(f);
+	if(closed != 0) return ((int)(__LINE__));
+	*out = monkeys_play_game(&monkeys);
+	monkeys_destruct(&monkeys);
+	return 0;
+}
+
+
 #include <stdio.h>
 
 int main(void)
@@ -2423,6 +2900,14 @@ int main(void)
 	if(err != 0) return err;
 	err = mk_aoc2022_day10b("input10b.txt", &ret);
 	if(err != 0) return err;
+
+	printf("%s\n", "Day 11");
+	err = mk_aoc2022_day11a("input11a.txt", &ret);
+	if(err != 0) return err;
+	printf("%d\n", ret);
+	err = mk_aoc2022_day11a("input11b.txt", &ret);
+	if(err != 0) return err;
+	printf("%d\n", ret);
 
 	return 0;
 }
