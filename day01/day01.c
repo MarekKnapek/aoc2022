@@ -2643,18 +2643,26 @@ int parse_monkey(FILE* f, struct monkey_s* monkey)
 	return 0;
 }
 
-int monkeys_play_game(struct monkeys_s* monkeys)
+long long int monkeys_play_game(struct monkeys_s* monkeys, int rounds, int div)
 {
-	int iround;
+	long long int all;
 	int imonkey;
 	struct monkey_s* monkey;
-	int worry;
-	int curiosity[2];
-	int ret;
+	int iround;
+	long long int worry;
+	int target_monkey;
+	long long int curiosity[2];
+	long long int ret;
 
 	assert(monkeys);
 
-	for(iround = 0; iround != 20; ++iround)
+	all = 1;
+	for(imonkey = 0; imonkey != monkeys->m_count; ++imonkey)
+	{
+		monkey = &monkeys->m_elements[imonkey];
+		all *= monkey->m_throw_logic_param;
+	}
+	for(iround = 0; iround != rounds; ++iround)
 	{
 		for(imonkey = 0; imonkey != monkeys->m_count; ++imonkey)
 		{
@@ -2667,14 +2675,8 @@ int monkeys_play_game(struct monkeys_s* monkeys)
 				ints_pop(&monkey->m_items);
 				if(monkey->m_worry_math == math_add)
 				{
-					if(monkey->m_worry_constant == math_use_old)
-					{
-						worry += worry;
-					}
-					else
-					{
-						worry += monkey->m_worry_constant;
-					}
+					assert(monkey->m_worry_constant != math_use_old);
+					worry += monkey->m_worry_constant;
 				}
 				else if(monkey->m_worry_math == math_mul)
 				{
@@ -2687,8 +2689,10 @@ int monkeys_play_game(struct monkeys_s* monkeys)
 						worry *= monkey->m_worry_constant;
 					}
 				}
-				worry /= 3;
-				ints_append(&monkeys->m_elements[((worry % monkey->m_throw_logic_param) == 0) ? (monkey->m_true_idx) : (monkey->m_false_idx)].m_items, worry);
+				worry /= div;
+				worry %= all;
+				target_monkey = ((worry % monkey->m_throw_logic_param) == 0) ? (monkey->m_true_idx) : (monkey->m_false_idx);
+				ints_append(&monkeys->m_elements[target_monkey].m_items, ((int)(worry)));
 			}
 		}
 	}
@@ -2711,7 +2715,7 @@ int monkeys_play_game(struct monkeys_s* monkeys)
 	return ret;
 }
 
-int mk_aoc2022_day11a(char const* const input, int* out)
+int mk_aoc2022_day11(char const* const input, int rounds, int div, long long int* out)
 {
 	FILE* f;
 	struct monkeys_s monkeys;
@@ -2739,9 +2743,19 @@ int mk_aoc2022_day11a(char const* const input, int* out)
 	mk_aoc2022_day05_line_destruct(&line);
 	closed = fclose(f);
 	if(closed != 0) return ((int)(__LINE__));
-	*out = monkeys_play_game(&monkeys);
+	*out = monkeys_play_game(&monkeys, rounds, div);
 	monkeys_destruct(&monkeys);
 	return 0;
+}
+
+int mk_aoc2022_day11a(char const* const input, long long int* out)
+{
+	return mk_aoc2022_day11(input, 20, 3, out);
+}
+
+int mk_aoc2022_day11b(char const* const input, long long int* out)
+{
+	return mk_aoc2022_day11(input, 10000, 1, out);
 }
 
 
@@ -2751,6 +2765,7 @@ int main(void)
 {
 	int err;
 	int ret;
+	long long int llret;
 
 	printf("%s\n", "Day 1");
 	err = mk_aoc2022_day01("input01a.txt", &ret);
@@ -2902,12 +2917,18 @@ int main(void)
 	if(err != 0) return err;
 
 	printf("%s\n", "Day 11");
-	err = mk_aoc2022_day11a("input11a.txt", &ret);
+	err = mk_aoc2022_day11a("input11a.txt", &llret);
 	if(err != 0) return err;
-	printf("%d\n", ret);
-	err = mk_aoc2022_day11a("input11b.txt", &ret);
+	printf("%lld\n", llret);
+	err = mk_aoc2022_day11a("input11b.txt", &llret);
 	if(err != 0) return err;
-	printf("%d\n", ret);
+	printf("%lld\n", llret);
+	err = mk_aoc2022_day11b("input11a.txt", &llret);
+	if(err != 0) return err;
+	printf("%lld\n", llret);
+	err = mk_aoc2022_day11b("input11b.txt", &llret);
+	if(err != 0) return err;
+	printf("%lld\n", llret);
 
 	return 0;
 }
