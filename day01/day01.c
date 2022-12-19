@@ -2759,6 +2759,281 @@ int mk_aoc2022_day11b(char const* const input, long long int* out)
 }
 
 
+struct grid_s
+{
+	int m_width;
+	int m_height;
+	int* m_elements;
+};
+
+void grid_construct(struct grid_s* grid, int width, int height)
+{
+	assert(grid);
+
+	grid->m_width = width;
+	grid->m_height = height;
+	grid->m_elements = malloc(grid->m_width * grid->m_height * sizeof(*grid->m_elements));
+	if(!grid->m_elements) crash();
+}
+
+void grid_destruct(struct grid_s* grid)
+{
+	assert(grid);
+
+	free(grid->m_elements);
+}
+
+int grid_get(struct grid_s* grid, int x, int y)
+{
+	assert(grid);
+	assert(x >= 0 && x < grid->m_width);
+	assert(y >= 0 && y < grid->m_height);
+
+	return grid->m_elements[y * grid->m_width + x];
+}
+
+void grid_set(struct grid_s* grid, int x, int y, int val)
+{
+	assert(grid);
+	assert(x >= 0 && x < grid->m_width);
+	assert(y >= 0 && y < grid->m_height);
+
+	grid->m_elements[y * grid->m_width + x] = val;
+}
+
+void grid_fill(struct grid_s* grid, int val)
+{
+	int y;
+	int x;
+
+	assert(grid);
+
+	for(y = 0; y != grid->m_height; ++y)
+	{
+		for(x = 0; x != grid->m_width; ++x)
+		{
+			grid_set(grid, x, y, val);
+		}
+	}
+}
+
+struct day12_s
+{
+	struct grid_s m_grid;
+	int m_startx;
+	int m_starty;
+	int m_goalx;
+	int m_goaly;
+};
+
+void day12_construct(struct day12_s* day12, char const* const filename)
+{
+	FILE* file;
+	struct line_s line;
+	struct lines_s lines;
+	int err;
+	int y;
+	int x;
+	char ch;
+	int closed;
+
+	assert(day12);
+	assert(filename);
+	assert(*filename);
+
+	file = fopen(filename, "rb");
+	if(!file) crash();
+	mk_aoc2022_day05_line_construct(&line);
+	err = mk_aoc2022_day05_line_read(file, &line);
+	if(err != 0) crash();
+	lines_construct(&lines);
+	lines_add(&lines, &line);
+	for(;;)
+	{
+		err = mk_aoc2022_day05_line_read(file, &line);
+		if(err != 0) crash();
+		if(line.m_count == 0) break;
+		if(line.m_count != lines.m_elements[0].m_count) crash();
+		lines_add(&lines, &line);
+	}
+	grid_construct(&day12->m_grid, lines.m_elements[0].m_count, lines.m_count);
+	for(y = 0; y != day12->m_grid.m_height; ++y)
+	{
+		for(x = 0; x != day12->m_grid.m_width; ++x)
+		{
+			ch = lines.m_elements[y].m_elements[x];
+			if(ch == 'S')
+			{
+				day12->m_startx = x;
+				day12->m_starty = y;
+				ch = 'a';
+			}
+			else if(ch == 'E')
+			{
+				day12->m_goalx = x;
+				day12->m_goaly = y;
+				ch = 'z';
+			}
+			grid_set(&day12->m_grid, x, y, ch - 'a');
+		}
+	}
+	lines_destruct(&lines);
+	mk_aoc2022_day05_line_destruct(&line);
+	closed = fclose(file);
+	if(closed != 0) crash();
+}
+
+void day12_destruct(struct day12_s* day12)
+{
+	assert(day12);
+
+	grid_destruct(&day12->m_grid);
+}
+
+unsigned int_pack(int a, int b)
+{
+	assert(a >= 0 && a <= 0xffff);
+	assert(b >= 0 && b <= 0xffff);
+
+	return ((unsigned)(((unsigned)(((unsigned)(a)) << 16)) | ((unsigned)(b))));
+}
+
+void int_unpack(unsigned x, int* a, int* b)
+{
+	assert(a);
+	assert(b);
+
+	*a = ((int)(((unsigned)(x >> 16))));
+	*b = ((int)(((unsigned)(x & 0xffff))));
+}
+
+int day12_find_path(struct day12_s* day12)
+{
+	int ret;
+	struct grid_s cost;
+	struct ints_s stack;
+	int x;
+	int y;
+	int ce; /* current elevation */
+	int cc; /* current cost */
+	int te; /* target elevation */
+	int tc; /* target cost */
+
+	assert(day12);
+
+	ret = 0;
+	grid_construct(&cost, day12->m_grid.m_width, day12->m_grid.m_height);
+	grid_fill(&cost, INT_MAX);
+	grid_set(&cost, day12->m_startx, day12->m_starty, 0);
+	ints_construct(&stack);
+	ints_append(&stack, ((int)(int_pack(day12->m_startx, day12->m_starty))));
+	while(stack.m_count != 0)
+	{
+		int_unpack(stack.m_elements[stack.m_count - 1], &x, &y);
+		ints_pop(&stack);
+		ce = grid_get(&day12->m_grid, x, y);
+		cc = grid_get(&cost, x, y);
+		if(y != 0)
+		{
+			te = grid_get(&day12->m_grid, x, y - 1);
+			tc = grid_get(&cost, x, y - 1);
+			if(ce + 1 >= te && tc > cc + 1)
+			{
+				grid_set(&cost, x, y - 1, cc + 1);
+				ints_append(&stack, ((int)(int_pack(x, y - 1))));
+			}
+		}
+		if(x != 0)
+		{
+			te = grid_get(&day12->m_grid, x - 1, y);
+			tc = grid_get(&cost, x - 1, y);
+			if(ce + 1 >= te && tc > cc + 1)
+			{
+				grid_set(&cost, x - 1, y, cc + 1);
+				ints_append(&stack, ((int)(int_pack(x - 1, y))));
+			}
+		}
+		if(y != cost.m_height - 1)
+		{
+			te = grid_get(&day12->m_grid, x, y + 1);
+			tc = grid_get(&cost, x, y + 1);
+			if(ce + 1 >= te && tc > cc + 1)
+			{
+				grid_set(&cost, x, y + 1, cc + 1);
+				ints_append(&stack, ((int)(int_pack(x, y + 1))));
+			}
+		}
+		if(x != cost.m_width - 1)
+		{
+			te = grid_get(&day12->m_grid, x + 1, y);
+			tc = grid_get(&cost, x + 1, y);
+			if(ce + 1 >= te && tc > cc + 1)
+			{
+				grid_set(&cost, x + 1, y, cc + 1);
+				ints_append(&stack, ((int)(int_pack(x + 1, y))));
+			}
+		}
+	}
+	ret = grid_get(&cost, day12->m_goalx, day12->m_goaly);
+	ints_destruct(&stack);
+	grid_destruct(&cost);
+	return ret;
+}
+
+int day12_find_path2(struct day12_s* day12)
+{
+	int ret;
+	int x;
+	int y;
+	int cost;
+
+	assert(day12);
+
+	ret = INT_MAX;
+	for(y = 0; y != day12->m_grid.m_height; ++y)
+	{
+		for(x = 0; x != day12->m_grid.m_width; ++x)
+		{
+			if(grid_get(&day12->m_grid, x, y) == 0)
+			{
+				day12->m_startx = x;
+				day12->m_starty = y;
+				cost = day12_find_path(day12);
+				if(cost < ret)
+				{
+					ret = cost;
+				}
+			}
+		}
+	}
+	return ret;
+}
+
+void mk_aoc2022_day12a(char const* const input, int* out)
+{
+	struct day12_s day12;
+
+	assert(input);
+	assert(out);
+
+	day12_construct(&day12, input);
+	*out = day12_find_path(&day12);
+	day12_destruct(&day12);
+}
+
+void mk_aoc2022_day12b(char const* const input, int* out)
+{
+	struct day12_s day12;
+
+	assert(input);
+	assert(out);
+
+	day12_construct(&day12, input);
+	*out = day12_find_path2(&day12);
+	day12_destruct(&day12);
+}
+
+
 #include <stdio.h>
 
 int main(void)
@@ -2929,6 +3204,16 @@ int main(void)
 	err = mk_aoc2022_day11b("input11b.txt", &llret);
 	if(err != 0) return err;
 	printf("%lld\n", llret);
+
+	printf("%s\n", "Day 12");
+	mk_aoc2022_day12a("input12a.txt", &ret);
+	printf("%d\n", ret);
+	mk_aoc2022_day12a("input12b.txt", &ret);
+	printf("%d\n", ret);
+	mk_aoc2022_day12b("input12a.txt", &ret);
+	printf("%d\n", ret);
+	mk_aoc2022_day12b("input12b.txt", &ret);
+	printf("%d\n", ret);
 
 	return 0;
 }
