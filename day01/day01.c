@@ -3244,6 +3244,7 @@ void mk_aoc2022_day13a(char const* const input, int* out)
 	int err;
 	struct list_s lista;
 	struct list_s listb;
+	int closed;
 
 	assert(input);
 	assert(*input);
@@ -3276,6 +3277,8 @@ void mk_aoc2022_day13a(char const* const input, int* out)
 		list_destruct(&listb);
 	}
 	mk_aoc2022_day05_line_destruct(&line);
+	closed = fclose(file);
+	if(closed != 0) crash();
 	*out = sum;
 }
 
@@ -3389,6 +3392,7 @@ void mk_aoc2022_day13b(char const* const input, int* out)
 	FILE* file;
 	int err;
 	struct list_s list;
+	int closed;
 	struct list_s list2;
 	struct list_element_s item;
 	struct list_s list6;
@@ -3418,6 +3422,8 @@ void mk_aoc2022_day13b(char const* const input, int* out)
 		if(line.m_count != 0) crash();
 	}
 	mk_aoc2022_day05_line_destruct(&line);
+	closed = fclose(file);
+	if(closed != 0) crash();
 	list_construct(&list2);
 	item.m_type = 0;
 	item.m_data.m_single = 2;
