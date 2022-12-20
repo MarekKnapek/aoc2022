@@ -3034,6 +3034,395 @@ void mk_aoc2022_day12b(char const* const input, int* out)
 }
 
 
+struct list_element_s;
+
+struct list_s
+{
+	int m_count;
+	int m_capacity;
+	struct list_element_s* m_elements;
+};
+
+union list_element_u
+{
+	int m_single;
+	struct list_s m_multi;
+};
+
+struct list_element_s
+{
+	int m_type;
+	union list_element_u m_data;
+};
+
+void list_construct(struct list_s* list)
+{
+	assert(list);
+
+	list->m_count = 0;
+	list->m_capacity = 0;
+	list->m_elements = NULL;
+}
+
+void list_destruct(struct list_s* list)
+{
+	assert(list);
+
+	free(list->m_elements);
+}
+
+void list_add(struct list_s* list, struct list_element_s* item)
+{
+	struct list_element_s* nelements;
+
+	assert(list);
+	assert(item);
+
+	if(list->m_count == list->m_capacity)
+	{
+		list->m_capacity *= 2;
+		if(list->m_capacity == 0) list->m_capacity = 8;
+		nelements = malloc(list->m_capacity * sizeof(*nelements));
+		if(!nelements) crash();
+		memcpy(nelements, list->m_elements, list->m_count * sizeof(*nelements));
+		free(list->m_elements);
+		list->m_elements = nelements;
+	}
+	list->m_elements[list->m_count] = *item;
+	++list->m_count;
+}
+
+void list_parse_r(char const** ptr, struct list_s* list)
+{
+	char const* it;
+	int err;
+	char const* nend;
+	int value;
+	struct list_element_s item;
+
+	assert(ptr);
+	assert(*ptr);
+	assert(list);
+
+	it = *ptr;
+	list_construct(list);
+	if(*it != '[') crash();
+	++it;
+	for(;;)
+	{
+		if(*it == ']')
+		{
+			++it;
+			if(*it == ',') ++it;
+			break;
+		}
+		else if(*it == '[')
+		{
+			item.m_type = 1;
+			list_parse_r(&it, &item.m_data.m_multi);
+			list_add(list, &item);
+			if(*it == ',') ++it;
+		}
+		else
+		{
+			parse_int(it, it + 999, &err, &nend, &value);
+			if(err != 0) crash();
+			item.m_type = 0;
+			item.m_data.m_single = value;
+			list_add(list, &item);
+			it = nend;
+			if(*it == ',') ++it;
+		}
+	}
+	*ptr = it;
+}
+
+void list_parse(struct line_s* line, struct list_s* list)
+{
+	char const* pos;
+
+	assert(line);
+	assert(list);
+
+	pos = line->m_elements;
+	list_parse_r(&pos, list);
+	if(pos != line->m_elements + line->m_count) crash();
+}
+
+int list_compare(struct list_s* a, struct list_s* b)
+{
+	int i;
+
+	assert(a);
+	assert(b);
+
+	i = 0;
+	for(;; ++i)
+	{
+		if(i != a->m_count && i != b->m_count)
+		{
+			if(a->m_elements[i].m_type == 0 && b->m_elements[i].m_type == 0)
+			{
+				if(a->m_elements[i].m_data.m_single < b->m_elements[i].m_data.m_single)
+				{
+					return 1;
+				}
+				else if(a->m_elements[i].m_data.m_single > b->m_elements[i].m_data.m_single)
+				{
+					return 0;
+				}
+			}
+			else if(a->m_elements[i].m_type == 1 && b->m_elements[i].m_type == 1)
+			{
+				int cmp;
+				cmp = list_compare(&a->m_elements[i].m_data.m_multi, &b->m_elements[i].m_data.m_multi);
+				if(cmp != 2)
+				{
+					return cmp;
+				}
+			}
+			else
+			{
+				struct list_s tmp;
+				struct list_element_s item;
+				int cmp;
+				list_construct(&tmp);
+				if(a->m_elements[i].m_type == 0)
+				{
+					item.m_type = 0;
+					item.m_data.m_single = a->m_elements[i].m_data.m_single;
+					list_add(&tmp, &item);
+					cmp = list_compare(&tmp, &b->m_elements[i].m_data.m_multi);
+				}
+				else
+				{
+					item.m_type = 0;
+					item.m_data.m_single = b->m_elements[i].m_data.m_single;
+					list_add(&tmp, &item);
+					cmp = list_compare(&a->m_elements[i].m_data.m_multi, &tmp);
+				}
+				list_destruct(&tmp);
+				if(cmp != 2)
+				{
+					return cmp;
+				}
+			}
+		}
+		else if(a->m_count == i && i != b->m_count)
+		{
+			return 1;
+		}
+		else if(a->m_count != i && i == b->m_count)
+		{
+			return 0;
+		}
+		else if(a->m_count == i && i == b->m_count)
+		{
+			return 2;
+		}
+	}
+	crash();
+}
+
+void mk_aoc2022_day13a(char const* const input, int* out)
+{
+	struct line_s line;
+	FILE* file;
+	int i;
+	int sum;
+	int err;
+	struct list_s lista;
+	struct list_s listb;
+
+	assert(input);
+	assert(*input);
+	assert(out);
+
+	mk_aoc2022_day05_line_construct(&line);
+	file = fopen(input, "rb");
+	if(!file) crash();
+	i = 0;
+	sum = 0;
+	for(;;)
+	{
+		++i;
+		err = mk_aoc2022_day05_line_read(file, &line);
+		if(err != 0) crash();
+		if(line.m_count == 0) break;
+		list_parse(&line, &lista);
+		err = mk_aoc2022_day05_line_read(file, &line);
+		if(err != 0) crash();
+		if(line.m_count == 0) crash();
+		list_parse(&line, &listb);
+		err = mk_aoc2022_day05_line_read(file, &line);
+		if(err != 0) crash();
+		if(line.m_count != 0) crash();
+		if(list_compare(&lista, &listb) == 1)
+		{
+			sum += i;
+		}
+		list_destruct(&lista);
+		list_destruct(&listb);
+	}
+	mk_aoc2022_day05_line_destruct(&line);
+	*out = sum;
+}
+
+struct lists_s
+{
+	int m_count;
+	int m_capacity;
+	struct list_s* m_elements;
+};
+
+void lists_construct(struct lists_s* lists)
+{
+	assert(lists);
+
+	lists->m_count = 0;
+	lists->m_capacity = 0;
+	lists->m_elements = NULL;
+}
+
+void lists_destruct(struct lists_s* lists)
+{
+	int i;
+
+	assert(lists);
+
+	for(i = 0; i != lists->m_count; ++i)
+	{
+		list_destruct(&lists->m_elements[i]);
+	}
+	free(lists->m_elements);
+}
+
+void lists_add(struct lists_s* lists, struct list_s* list)
+{
+	struct list_s* nelems;
+
+	assert(lists);
+	assert(list);
+
+	if(lists->m_count == lists->m_capacity)
+	{
+		lists->m_capacity *= 2;
+		if(lists->m_capacity == 0) lists->m_capacity = 8;
+		nelems = malloc(lists->m_capacity * sizeof(*nelems));
+		if(!nelems) crash();
+		memcpy(nelems, lists->m_elements, lists->m_count * sizeof(*nelems));
+		free(lists->m_elements);
+		lists->m_elements = nelems;
+	}
+	lists->m_elements[lists->m_count] = *list;
+	++lists->m_count;
+}
+
+void lists_sort(struct lists_s* lists)
+{
+	int n;
+	int changed;
+	int i;
+	int cmp;
+	struct list_s tmp;
+
+	assert(lists);
+
+	n = lists->m_count;
+	do
+	{
+		changed = 0;
+		for(i = 0; i != n - 1; ++i)
+		{
+			cmp = list_compare(&lists->m_elements[i], &lists->m_elements[i + 1]);
+			if(cmp == 0)
+			{
+				tmp = lists->m_elements[i];
+				lists->m_elements[i] = lists->m_elements[i + 1];
+				lists->m_elements[i + 1] = tmp;
+				changed = 1;
+			}
+		}
+	}while(changed != 0);
+}
+
+int lists_find(struct lists_s* lists, struct list_s* list)
+{
+	int n;
+	int i;
+
+	assert(lists);
+	assert(list);
+
+	n = lists->m_count;
+	for(i = 0; i != n; ++i)
+	{
+		if
+		(
+			lists->m_elements[i].m_count == list->m_count &&
+			lists->m_elements[i].m_capacity == list->m_capacity &&
+			lists->m_elements[i].m_elements == list->m_elements
+		)
+		{
+			return i + 1;
+		}
+	}
+	crash();
+	return -1;
+}
+
+void mk_aoc2022_day13b(char const* const input, int* out)
+{
+	struct lists_s lists;
+	struct line_s line;
+	FILE* file;
+	int err;
+	struct list_s list;
+	struct list_s list2;
+	struct list_element_s item;
+	struct list_s list6;
+
+	assert(input);
+	assert(*input);
+	assert(out);
+
+	lists_construct(&lists);
+	mk_aoc2022_day05_line_construct(&line);
+	file = fopen(input, "rb");
+	if(!file) crash();
+	for(;;)
+	{
+		err = mk_aoc2022_day05_line_read(file, &line);
+		if(err != 0) crash();
+		if(line.m_count == 0) break;
+		list_parse(&line, &list);
+		lists_add(&lists, &list);
+		err = mk_aoc2022_day05_line_read(file, &line);
+		if(err != 0) crash();
+		if(line.m_count == 0) crash();
+		list_parse(&line, &list);
+		lists_add(&lists, &list);
+		err = mk_aoc2022_day05_line_read(file, &line);
+		if(err != 0) crash();
+		if(line.m_count != 0) crash();
+	}
+	mk_aoc2022_day05_line_destruct(&line);
+	list_construct(&list2);
+	item.m_type = 0;
+	item.m_data.m_single = 2;
+	list_add(&list2, &item);
+	lists_add(&lists, &list2);
+	list_construct(&list6);
+	item.m_type = 0;
+	item.m_data.m_single = 6;
+	list_add(&list6, &item);
+	lists_add(&lists, &list6);
+	lists_sort(&lists);
+	*out = lists_find(&lists, &list2) * lists_find(&lists, &list6);
+	lists_destruct(&lists);
+}
+
+
 #include <stdio.h>
 
 int main(void)
@@ -3213,6 +3602,16 @@ int main(void)
 	mk_aoc2022_day12b("input12a.txt", &ret);
 	printf("%d\n", ret);
 	mk_aoc2022_day12b("input12b.txt", &ret);
+	printf("%d\n", ret);
+
+	printf("%s\n", "Day 13");
+	mk_aoc2022_day13a("input13a.txt", &ret);
+	printf("%d\n", ret);
+	mk_aoc2022_day13a("input13b.txt", &ret);
+	printf("%d\n", ret);
+	mk_aoc2022_day13b("input13a.txt", &ret);
+	printf("%d\n", ret);
+	mk_aoc2022_day13b("input13b.txt", &ret);
 	printf("%d\n", ret);
 
 	return 0;
