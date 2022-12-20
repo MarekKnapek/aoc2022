@@ -3066,8 +3066,19 @@ void list_construct(struct list_s* list)
 
 void list_destruct(struct list_s* list)
 {
+	int n;
+	int i;
+
 	assert(list);
 
+	n = list->m_count;;
+	for(i = 0; i != n; ++i)
+	{
+		if(list->m_elements[i].m_type == 1)
+		{
+			list_destruct(&list->m_elements[i].m_data.m_multi);
+		}
+	}
 	free(list->m_elements);
 }
 
