@@ -3440,6 +3440,298 @@ void mk_aoc2022_day13b(char const* const input, int* out)
 }
 
 
+void day14_parse(char const* const file_name, struct ints_s* values)
+{
+	struct line_s line;
+	FILE* file;
+	int err;
+	char const* pos;
+	char const* nend;
+	int value;
+	int closed;
+
+	assert(file_name);
+	assert(*file_name);
+	assert(values);
+
+	ints_construct(values);
+	mk_aoc2022_day05_line_construct(&line);
+	file = fopen(file_name, "rb");
+	if(!file) crash();
+	for(;;)
+	{
+		err = mk_aoc2022_day05_line_read(file, &line);
+		if(err != 0) crash();
+		if(line.m_count == 0) break;
+		pos = line.m_elements;
+		{
+			parse_int(pos, line.m_elements + line.m_count, &err, &nend, &value);
+			if(err != 0) crash();
+			ints_append(values, value);
+			if(*nend != ',') crash();
+			pos = nend + 1;
+			parse_int(pos, line.m_elements + line.m_count, &err, &nend, &value);
+			if(err != 0) crash();
+			ints_append(values, value);
+			pos = nend;
+		}
+		for(;;)
+		{
+			if(pos == line.m_elements + line.m_count)
+			{
+				break;
+			}
+			if(!(pos <= line.m_elements + line.m_count - 4)) crash();
+			if(memcmp(pos, " -> ", 4) != 0) crash();
+			pos += 4;
+			{
+				parse_int(pos, line.m_elements + line.m_count, &err, &nend, &value);
+				if(err != 0) crash();
+				ints_append(values, value);
+				if(*nend != ',') crash();
+				pos = nend + 1;
+				parse_int(pos, line.m_elements + line.m_count, &err, &nend, &value);
+				if(err != 0) crash();
+				ints_append(values, value);
+				pos = nend;
+				if
+				(!(
+					values->m_elements[values->m_count - 1] == values->m_elements[values->m_count - 3] ||
+					values->m_elements[values->m_count - 2] == values->m_elements[values->m_count - 4]
+				)) crash();
+			}
+		}
+		ints_append(values, -1);
+		ints_append(values, -1);
+	}
+	mk_aoc2022_day05_line_destruct(&line);
+	closed = fclose(file);
+	if(closed != 0) crash();
+}
+
+struct day14_sizes_s
+{
+	int m_minx;
+	int m_maxx;
+	int m_miny;
+	int m_maxy;
+};
+
+void day14_build_grid(struct ints_s* values, struct grid_s* grid, struct day14_sizes_s* sizes, int algo)
+{
+	int i;
+	int x;
+	int y;
+	int xx;
+	int yy;
+	int a;
+	int b;
+	int j;
+
+	assert(values);
+	assert(grid);
+	assert(sizes);
+
+	sizes->m_minx = INT_MAX;
+	sizes->m_maxx = INT_MIN;
+	sizes->m_miny = INT_MAX;
+	sizes->m_maxy = INT_MIN;
+	for(i = 0; i != values->m_count / 2; ++i)
+	{
+		x = values->m_elements[i * 2 + 0];
+		y = values->m_elements[i * 2 + 1];
+		if(x == -1 && y == -1) continue;
+		if(x < sizes->m_minx) sizes->m_minx = x;
+		if(x > sizes->m_maxx) sizes->m_maxx = x;
+		if(y < sizes->m_miny) sizes->m_miny = y;
+		if(y > sizes->m_maxy) sizes->m_maxy = y;
+	}
+	if(algo == 1)
+	{
+		ints_append(values, sizes->m_minx - (sizes->m_maxx - sizes->m_minx + 1) * 2 - (sizes->m_maxy - sizes->m_miny + 1) * 2); ints_append(values, sizes->m_maxy + 2);
+		ints_append(values, sizes->m_maxx + (sizes->m_maxx - sizes->m_minx + 1) * 2 + (sizes->m_maxy - sizes->m_miny + 1) * 2); ints_append(values, sizes->m_maxy + 2);
+		sizes->m_minx -= ((sizes->m_maxx - sizes->m_minx + 1) * 2 + (sizes->m_maxy - sizes->m_miny + 1) * 2);
+		sizes->m_maxx += ((sizes->m_maxx - sizes->m_minx + 1) * 2 + (sizes->m_maxy - sizes->m_miny + 1) * 2);
+		sizes->m_maxy += 2;
+	}
+	sizes->m_miny = 0;
+	grid_construct(grid, sizes->m_maxx - sizes->m_minx + 1, sizes->m_maxy - sizes->m_miny + 1);
+	grid_fill(grid, 0);
+	xx = values->m_elements[0 * 2 + 0];
+	yy = values->m_elements[0 * 2 + 1];
+	for(j = 1; j != values->m_count / 2; ++j)
+	{
+		x = values->m_elements[j * 2 + 0];
+		y = values->m_elements[j * 2 + 1];
+		if(!((x == -1 && y == -1) || (xx == -1 && yy == -1)))
+		{
+			if(x == xx)
+			{
+				a = yy < y ? yy : y;
+				b = yy < y ? y : yy;
+				for(i = 0; i != b - a + 1; ++i)
+				{
+					grid_set(grid, x - sizes->m_minx, a + i - sizes->m_miny, 1);
+				}
+			}
+			else if(y == yy)
+			{
+				a = xx < x ? xx : x;
+				b = xx < x ? x : xx;
+				for(i = 0; i != b - a + 1; ++i)
+				{
+					grid_set(grid, a + i - sizes->m_minx, y - sizes->m_miny, 1);
+				}
+			}
+		}
+		xx = x;
+		yy = y;
+	}
+}
+
+void visualize_sand(struct grid_s* grid, int idx)
+{
+	static char const s_p3_header[] = "P3\x0a";
+	static char const s_p3_colors[] = "255\x0a";
+
+	char name[64];
+	FILE* file;
+	int y;
+	int x;
+	int r;
+	int item;
+	int g;
+	int b;
+	int closed;
+
+	sprintf(name, "%06d.ppm", idx);
+	file = fopen(name, "wb");
+	if(!file) crash();
+	fwrite(s_p3_header, 1, sizeof(s_p3_header) / sizeof(*s_p3_header) - 1, file);
+	fprintf(file, "%d %d\x0a", grid->m_width, grid->m_height);
+	fwrite(s_p3_colors, 1, sizeof(s_p3_colors) / sizeof(*s_p3_colors) - 1, file);
+	for(y = 0; y != grid->m_height; ++y)
+	{
+		for(x = 0; x != grid->m_width; ++x)
+		{
+			item = grid_get(grid, x, y);
+			if(item == 0){ r = 0; g = 0; b = 0; }
+			else if(item == 1){ r = 0; g = 255; b = 0; }
+			else if(item == 2){ r = 255; g = 255; b = 0; }
+			fprintf(file, "%d %d %d\x0a", r, g, b);
+		}
+	}
+	closed = fclose(file);
+	if(closed != 0) crash();
+}
+
+void day14_simulate_sand(struct grid_s* grid, struct day14_sizes_s* sizes, int* out)
+{
+	int final_pieces;
+	int x;
+	int y;
+
+	assert(grid);
+	assert(sizes);
+	assert(out);
+
+	final_pieces = 0;
+	for(;;)
+	{
+		x = 500;
+		y = 0;
+		x = x - sizes->m_minx;
+		y = y - sizes->m_miny;
+		if(grid_get(grid, x, y) != 0)
+		{
+			visualize_sand(grid, final_pieces);
+			*out = final_pieces;
+			return;
+		}
+		for(;;)
+		{
+			if(y < -1)
+			{
+				++y;
+			}
+			else if(x < 0 || x == grid->m_width || y + 1 == grid->m_height)
+			{
+				visualize_sand(grid, final_pieces);
+				*out = final_pieces;
+				return;
+			}
+			else if(grid_get(grid, x, y + 1) == 0)
+			{
+				++y;
+			}
+			else if(x - 1 < 0)
+			{
+				visualize_sand(grid, final_pieces);
+				*out = final_pieces;
+				return;
+			}
+			else if(grid_get(grid, x - 1, y + 1) == 0)
+			{
+				--x;
+				++y;
+			}
+			else if(x + 1 == grid->m_width)
+			{
+				visualize_sand(grid, final_pieces);
+				*out = final_pieces;
+				return;
+			}
+			else if(grid_get(grid, x + 1, y + 1) == 0)
+			{
+				++x;
+				++y;
+			}
+			else
+			{
+				grid_set(grid, x, y, 2);
+				/*visualize_sand(grid, final_pieces);*/
+				++final_pieces;
+				break;
+			}
+		}
+	}
+}
+
+void mk_aoc2022_day14a(char const* const input, int* out)
+{
+	struct ints_s values;
+	struct grid_s grid;
+	struct day14_sizes_s sizes;
+
+	assert(input);
+	assert(*input);
+	assert(out);
+
+	day14_parse(input, &values);
+	day14_build_grid(&values, &grid, &sizes, 0);
+	ints_destruct(&values);
+	day14_simulate_sand(&grid, &sizes, out);
+	grid_destruct(&grid);
+}
+
+void mk_aoc2022_day14b(char const* const input, int* out)
+{
+	struct ints_s values;
+	struct grid_s grid;
+	struct day14_sizes_s sizes;
+
+	assert(input);
+	assert(*input);
+	assert(out);
+
+	day14_parse(input, &values);
+	day14_build_grid(&values, &grid, &sizes, 1);
+	ints_destruct(&values);
+	day14_simulate_sand(&grid, &sizes, out);
+	grid_destruct(&grid);
+}
+
+
 #include <stdio.h>
 
 int main(void)
@@ -3629,6 +3921,16 @@ int main(void)
 	mk_aoc2022_day13b("input13a.txt", &ret);
 	printf("%d\n", ret);
 	mk_aoc2022_day13b("input13b.txt", &ret);
+	printf("%d\n", ret);
+
+	printf("%s\n", "Day 14");
+	mk_aoc2022_day14a("input14a.txt", &ret);
+	printf("%d\n", ret);
+	mk_aoc2022_day14a("input14b.txt", &ret);
+	printf("%d\n", ret);
+	mk_aoc2022_day14b("input14a.txt", &ret);
+	printf("%d\n", ret);
+	mk_aoc2022_day14b("input14b.txt", &ret);
 	printf("%d\n", ret);
 
 	return 0;
